@@ -386,7 +386,7 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
   return (
     <div className="min-h-screen bg-background text-gray-100 flex flex-col">
       {/* Top Operational Bar */}
-      <header className="bg-surface border-b border-surface-border px-4 py-3 sticky top-0 z-30 shadow-md">
+      <header className="bg-surface border-b border-surface-border px-4 py-3 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           {/* Left: Exit & Event Identity */}
           <div className="flex items-center gap-3">
@@ -487,16 +487,16 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
         {/* Left/Center Column (7 cols): Camera Viewport & Manual Code Entry */}
         <div className="lg:col-span-7 flex flex-col gap-4">
           {/* Real-time Stats Cards */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="panel p-3 text-center">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+            <div className="panel p-3 text-center sm:col-span-2">
               <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-0.5">Checked In</div>
               <div className="text-2xl font-bold text-signal-green font-mono">{stats.checkedInCount}</div>
             </div>
-            <div className="panel p-3 text-center">
+            <div className="panel p-3 text-center sm:col-span-1">
               <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-0.5">Registered</div>
               <div className="text-2xl font-bold text-white font-mono">{stats.registeredCount}</div>
             </div>
-            <div className="panel p-3 text-center">
+            <div className="panel p-3 text-center sm:col-span-1">
               <div className="text-[11px] uppercase tracking-wider text-gray-400 mb-0.5">Attendance</div>
               <div className="text-2xl font-bold text-brand-cyan font-mono">{stats.attendanceRate}%</div>
             </div>
@@ -523,7 +523,7 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
                 <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-blue rounded-br-lg" />
 
                 {/* Animated Scan Line */}
-                <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-brand-cyan to-transparent shadow-[0_0_12px_#38BDF8] animate-scan-line absolute top-1/2" />
+                <div className="w-full h-0.5 bg-brand-cyan animate-scan-line absolute top-1/2" />
               </div>
             </div>
 

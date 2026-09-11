@@ -248,7 +248,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   return (
     <div className="min-h-screen bg-background text-gray-100 flex flex-col">
       {/* Top Organizer Navigation Bar */}
-      <header className="bg-surface border-b border-surface-border px-4 sm:px-6 py-3 sticky top-0 z-30 shadow-md">
+      <header className="bg-surface border-b border-surface-border px-4 sm:px-6 py-3 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-surface-subtle border border-surface-border text-brand-blue flex items-center justify-center">
@@ -289,7 +289,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-16 right-6 z-50 animate-scale-in">
-          <div className="panel px-4 py-2.5 bg-surface-subtle border-brand-blue/40 text-xs text-brand-cyan flex items-center gap-2 shadow-2xl">
+          <div className="panel px-4 py-2.5 bg-surface-subtle border-brand-blue/40 text-xs text-brand-cyan flex items-center gap-2">
             <SparklesIcon size={16} />
             <span>{toastMessage}</span>
           </div>
@@ -407,12 +407,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
             {/* Bento Statistics Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Registered Count */}
-              <div className="panel p-5">
+              <div className="panel p-5 lg:col-span-2">
                 <div className="flex items-center justify-between text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">
                   <span>Registered</span>
-                  <UsersIcon size={18} className="text-brand-blue" />
+                  <UsersIcon size={18} className="text-gray-500" />
                 </div>
-                <div className="text-3xl font-bold text-white font-mono">
+                <div className="text-4xl font-bold text-white font-mono">
                   {analytics?.registeredCount || 0}
                   <span className="text-sm font-normal text-gray-400 ml-1">/ {selectedEvent.capacity}</span>
                 </div>
@@ -436,7 +436,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="panel p-5">
                 <div className="flex items-center justify-between text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">
                   <span>Checked In</span>
-                  <CheckCircleIcon size={18} className="text-signal-green" />
+                  <CheckCircleIcon size={18} className="text-gray-500" />
                 </div>
                 <div className="text-3xl font-bold text-signal-green font-mono">
                   {analytics?.checkedInCount || 0}
@@ -451,7 +451,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="panel p-5">
                 <div className="flex items-center justify-between text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">
                   <span>Check-In Pace</span>
-                  <ClockIcon size={18} className="text-brand-pink" />
+                  <ClockIcon size={18} className="text-gray-500" />
                 </div>
                 <div className="text-3xl font-bold text-white font-mono">
                   {analytics?.recentCheckInRate || 0}
@@ -510,7 +510,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           {pt.time}: {pt.count} entries (Total: {pt.cumulative})
                         </div>
                         <div
-                          className="w-full bg-gradient-to-t from-brand-blue to-brand-cyan rounded-t transition-all hover:opacity-80"
+                          className="w-full bg-brand-blue rounded-t transition-all hover:bg-brand-cyan"
                           style={{ height: `${heightPct}%` }}
                         />
                         <span className="text-[10px] text-gray-500 font-mono rotate-45 sm:rotate-0 mt-1">

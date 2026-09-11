@@ -164,7 +164,7 @@ export const PublicRegister: React.FC<PublicRegisterProps> = ({ eventId, onBackT
       {/* Main Container: Registration Form OR Confirmation Ticket */}
       <div className="w-full max-w-xl">
         {!ticketResult ? (
-          <div className="panel p-6 sm:p-8 shadow-2xl">
+          <div className="panel p-6 sm:p-8">
             {/* Capacity status bar */}
             <div className="mb-6 pb-6 border-b border-surface-border">
               <div className="flex justify-between items-center text-xs mb-2">
@@ -280,9 +280,8 @@ export const PublicRegister: React.FC<PublicRegisterProps> = ({ eventId, onBackT
           </div>
         ) : (
           /* Confirmation Ticket Card (scale-in animation) */
-          <div className="panel p-6 sm:p-8 animate-scale-in border-brand-blue/30 shadow-2xl relative overflow-hidden">
-            {/* Top gradient stripe */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-brand-blue via-brand-purple to-brand-pink" />
+          <div className="panel p-6 sm:p-8 animate-scale-in border-brand-blue/30 relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-brand-blue" />
 
             <div className="text-center mb-6">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-signal-green/10 border border-signal-green/30 text-signal-green mb-3">
@@ -299,7 +298,7 @@ export const PublicRegister: React.FC<PublicRegisterProps> = ({ eventId, onBackT
               </div>
 
               {/* QR Code Container */}
-              <div className="bg-white p-3.5 rounded-xl inline-block shadow-lg mx-auto mb-4">
+              <div className="bg-white p-3.5 rounded-xl inline-block mx-auto mb-4">
                 <img
                   src={ticketResult.attendee.qrDataUrl}
                   alt="Ticket QR Code"

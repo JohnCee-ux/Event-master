@@ -107,12 +107,12 @@ export const PostEventSummary: React.FC<PostEventSummaryProps> = ({ eventId, onB
         {/* Key Highlights Bento Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Registered */}
-          <div className="panel p-5">
+          <div className="panel p-5 lg:col-span-2">
             <div className="text-xs uppercase font-semibold tracking-wider text-gray-400 mb-1 flex items-center justify-between">
               <span>Total Registered</span>
-              <UsersIcon size={16} className="text-brand-blue" />
+              <UsersIcon size={16} className="text-gray-500" />
             </div>
-            <div className="text-3xl font-bold text-white font-mono">{summary.registeredCount}</div>
+            <div className="text-4xl font-bold text-white font-mono">{summary.registeredCount}</div>
             <div className="text-xs text-gray-400 mt-2">100% capacity baseline</div>
           </div>
 
@@ -120,7 +120,7 @@ export const PostEventSummary: React.FC<PostEventSummaryProps> = ({ eventId, onB
           <div className="panel p-5">
             <div className="text-xs uppercase font-semibold tracking-wider text-gray-400 mb-1 flex items-center justify-between">
               <span>Total Checked In</span>
-              <CheckCircleIcon size={16} className="text-signal-green" />
+              <CheckCircleIcon size={16} className="text-gray-500" />
             </div>
             <div className="text-3xl font-bold text-signal-green font-mono">{summary.checkedInCount}</div>
             <div className="text-xs text-gray-400 mt-2">{summary.attendanceRate}% final attendance rate</div>
@@ -130,7 +130,7 @@ export const PostEventSummary: React.FC<PostEventSummaryProps> = ({ eventId, onB
           <div className="panel p-5">
             <div className="text-xs uppercase font-semibold tracking-wider text-gray-400 mb-1 flex items-center justify-between">
               <span>Peak Check-In</span>
-              <ClockIcon size={16} className="text-brand-pink" />
+              <ClockIcon size={16} className="text-gray-500" />
             </div>
             <div className="text-xl font-bold text-white font-mono truncate">
               {summary.peakCheckInPeriod || 'N/A'}

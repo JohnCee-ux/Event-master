@@ -32,7 +32,7 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({ onNavigate
     <div className="min-h-screen bg-background flex flex-col justify-center items-center px-4 py-12">
       {/* Brand Header */}
       <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-surface-subtle border border-surface-border text-brand-blue mb-4 shadow-lg shadow-black/40">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-surface-subtle border border-surface-border text-brand-blue mb-4">
           <ShieldCheckIcon size={32} />
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
@@ -46,8 +46,8 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({ onNavigate
       {/* Flat dark panel registration card */}
       <div className="w-full max-w-md panel p-8">
         <div className="mb-6">
-          <h2 className="text-lg font-semibold text-white">Get started</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Manage events, fast scanning, and post-event analytics</p>
+          <h2 className="text-lg font-semibold text-white">Create your organizer workspace</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Set up registration, door scanning, and post-event reporting.</p>
         </div>
 
         {error && (
@@ -81,7 +81,7 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({ onNavigate
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="organizer@example.com"
+              placeholder="name@yourcompany.com"
               className="input-dark"
               autoComplete="email"
             />
