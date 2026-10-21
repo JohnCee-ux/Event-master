@@ -24,11 +24,20 @@ router.post('/sync', authMiddleware_js_1.authMiddleware, ownershipMiddleware_js_
         const event = req.event;
         const organizer = req.organizer;
         const { deviceId, scans } = validated;
+        if (event.status !== 'LIVE') {
+            res.status(409).json({ error: 'Offline scans can only be synchronized while the event is live.' });
+            return;
+        }
         const sortedScans = [...scans].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         const results = [];
         for (const scan of sortedScans) {
             const cleanCode = scan.ticketCodeOrToken.trim();
             try {
+                const scanTimestamp = new Date(scan.timestamp);
+                if (isNaN(scanTimestamp.getTime()) || Math.abs(Date.now() - scanTimestamp.getTime()) > 24 * 60 * 60 * 1000) {
+                    results.push({ scanId: scan.scanId, status: 'FAILED', message: 'Offline timestamp is invalid or outside the permitted window.' });
+                    continue;
+                }
                 const attendee = await Attendee_js_1.Attendee.findOne({
                     eventId: event._id,
                     $or: [{ ticketCode: cleanCode.toUpperCase() }, { qrToken: cleanCode }],
@@ -85,11 +94,15 @@ router.post('/sync', authMiddleware_js_1.authMiddleware, ownershipMiddleware_js_
                     });
                     continue;
                 }
-                const scanTimestamp = new Date(scan.timestamp);
-                const validTime = isNaN(scanTimestamp.getTime()) ? new Date() : scanTimestamp;
-                attendee.checkedInAt = validTime;
-                attendee.checkedInBy = `Offline (${deviceId})`;
-                await attendee.save();
+                const validTime = scanTimestamp;
+                const claimedAttendee = await Attendee_js_1.Attendee.findOneAndUpdate({ _id: attendee._id, checkedInAt: null, offlineScanIds: { $ne: scan.scanId } }, {
+                    $set: { checkedInAt: validTime, checkedInBy: `Offline (${deviceId})` },
+                    $addToSet: { offlineScanIds: scan.scanId },
+                });
+                if (!claimedAttendee) {
+                    results.push({ scanId: scan.scanId, status: 'DUPLICATE', message: 'Already checked in before sync.' });
+                    continue;
+                }
                 await (0, auditService_js_1.logAuditEvent)({
                     eventId: event._id,
                     attendeeId: attendee._id,

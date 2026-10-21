@@ -15,9 +15,23 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5001',
         changeOrigin: true,
         secure: false,
+      },
+    },
+  },
+  // Ensure all routes fall back to index.html so React Router handles them
+  preview: {
+    port: 4173,
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split vendor libraries into a separate chunk for better browser caching
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+        },
       },
     },
   },

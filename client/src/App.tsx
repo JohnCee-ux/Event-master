@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
 import { OfflineSyncProvider } from './context/OfflineSyncContext.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { Login } from './pages/Login.js';
 import { RegisterOrganizer } from './pages/RegisterOrganizer.js';
 import { Dashboard } from './pages/Dashboard.js';
@@ -8,116 +10,254 @@ import { LiveMode } from './pages/LiveMode.js';
 import { PostEventSummary } from './pages/PostEventSummary.js';
 import { AuditLogView } from './pages/AuditLogView.js';
 import { PublicRegister } from './pages/PublicRegister.js';
+import { SuperAdminDashboard } from './pages/SuperAdminDashboard.js';
 
-type ViewMode = 'auth_login' | 'auth_register' | 'dashboard' | 'live' | 'summary' | 'audit' | 'public_register';
+// ─── Loading screen ───────────────────────────────────────────────────────────
+const LoadingScreen: React.FC<{ label?: string }> = ({ label = 'Loading...' }) => (
+  <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-10 h-10 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" />
+      <span className="text-sm text-gray-400 font-medium tracking-wide">{label}</span>
+    </div>
+  </div>
+);
 
-const MainRouter: React.FC = () => {
+// ─── Guards ───────────────────────────────────────────────────────────────────
+
+/** Redirects to /login if the user is not authenticated. */
+const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
-  const [view, setView] = useState<ViewMode>('dashboard');
-  const [activeEventId, setActiveEventId] = useState<string>('');
-
-  // Handle URL query parameters (e.g. ?eventId=...&view=register)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const eventIdParam = params.get('eventId') || params.get('event');
-    const viewParam = params.get('view');
-
-    if (eventIdParam) {
-      setActiveEventId(eventIdParam);
-      if (viewParam === 'register' || !isAuthenticated) {
-        setView('public_register');
-      }
-    }
-  }, [isAuthenticated]);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-gray-400 font-medium tracking-wide">Initializing GateKeeper...</span>
-        </div>
-      </div>
-    );
-  }
-
-  // Public attendee registration route can be accessed by anyone with an eventId
-  if (view === 'public_register' && activeEventId) {
-    return (
-      <PublicRegister
-        eventId={activeEventId}
-        onBackToDashboard={isAuthenticated ? () => setView('dashboard') : undefined}
-      />
-    );
-  }
-
-  // If not logged in, show login/register
-  if (!isAuthenticated) {
-    if (view === 'auth_register') {
-      return <RegisterOrganizer onNavigateToLogin={() => setView('auth_login')} />;
-    }
-    return <Login onNavigateToRegister={() => setView('auth_register')} />;
-  }
-
-  // Authenticated organizer views
-  switch (view) {
-    case 'live':
-      return (
-        <LiveMode
-          eventId={activeEventId}
-          onExit={() => setView('dashboard')}
-          onEventEnded={() => setView('summary')}
-        />
-      );
-
-    case 'summary':
-      return (
-        <PostEventSummary
-          eventId={activeEventId}
-          onBack={() => setView('dashboard')}
-        />
-      );
-
-    case 'audit':
-      return (
-        <AuditLogView
-          eventId={activeEventId}
-          onBack={() => setView('dashboard')}
-        />
-      );
-
-    case 'dashboard':
-    default:
-      return (
-        <Dashboard
-          onEnterLiveMode={(id) => {
-            setActiveEventId(id);
-            setView('live');
-          }}
-          onViewSummary={(id) => {
-            setActiveEventId(id);
-            setView('summary');
-          }}
-          onViewAuditLog={(id) => {
-            setActiveEventId(id);
-            setView('audit');
-          }}
-          onOpenPublicRegister={(id) => {
-            setActiveEventId(id);
-            setView('public_register');
-          }}
-        />
-      );
-  }
+  if (isLoading) return <LoadingScreen label="Initializing GateKeeper..." />;
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <>{children}</>;
 };
 
+/** Redirects authenticated users away from login/register to the dashboard. */
+const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  if (isLoading) return <LoadingScreen label="Initializing GateKeeper..." />;
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+};
+
+// ─── Route wrapper components ─────────────────────────────────────────────────
+// Each wrapper bridges React Router's URL/params API with the existing
+// page components' callback-prop navigation interface — so pages don't change.
+
+const LoginRoute: React.FC = () => {
+  const navigate = useNavigate();
+  return (
+    <Login
+      onNavigateToRegister={() => navigate('/register')}
+      onNavigateToLogin={() => navigate('/login')}
+      onNavigateToPublicRegister={() => navigate('/public/register')}
+      openAuthOnLoad
+      onCancelAuth={() => navigate('/')}
+    />
+  );
+};
+
+const LandingRoute: React.FC = () => {
+  const navigate = useNavigate();
+  return (
+    <Login
+      onNavigateToRegister={() => navigate('/register')}
+      onNavigateToLogin={() => navigate('/login')}
+      onNavigateToPublicRegister={() => navigate('/public/register')}
+    />
+  );
+};
+
+const RegisterRoute: React.FC = () => {
+  const navigate = useNavigate();
+  return (
+    <RegisterOrganizer
+      onNavigateToLogin={() => navigate('/login')}
+      onNavigateToPublicRegister={() => navigate('/public/register')}
+    />
+  );
+};
+
+const DashboardRoute: React.FC = () => {
+  const navigate = useNavigate();
+  return (
+    <Dashboard
+      onEnterLiveMode={(id) => navigate(`/events/${id}/live`)}
+      onViewSummary={(id) => navigate(`/events/${id}/summary`)}
+      onViewAuditLog={(id) => navigate(`/events/${id}/audit`)}
+      onOpenPublicRegister={(id) => navigate(`/public/register?eventId=${id}`)}
+      onNavigateToSuperAdmin={() => navigate('/super-admin')}
+    />
+  );
+};
+
+const LiveModeRoute: React.FC = () => {
+  const { eventId = '' } = useParams<{ eventId: string }>();
+  const navigate = useNavigate();
+  return (
+    <LiveMode
+      eventId={eventId}
+      onExit={() => navigate('/dashboard')}
+      onEventEnded={() => navigate(`/events/${eventId}/summary`)}
+    />
+  );
+};
+
+const SummaryRoute: React.FC = () => {
+  const { eventId = '' } = useParams<{ eventId: string }>();
+  const navigate = useNavigate();
+  return (
+    <PostEventSummary
+      eventId={eventId}
+      onBack={() => navigate('/dashboard')}
+    />
+  );
+};
+
+const AuditRoute: React.FC = () => {
+  const { eventId = '' } = useParams<{ eventId: string }>();
+  const navigate = useNavigate();
+  return (
+    <AuditLogView
+      eventId={eventId}
+      onBack={() => navigate('/dashboard')}
+    />
+  );
+};
+
+const PublicRegisterRoute: React.FC = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  // Read optional ?eventId= from the query string
+  const params = new URLSearchParams(window.location.search);
+  const eventId = params.get('eventId') || params.get('event') || '';
+
+  return (
+    <PublicRegister
+      eventId={eventId}
+      onSelectEvent={(id) => navigate(`/public/register?eventId=${id}`)}
+      onBackToDashboard={isAuthenticated ? () => navigate('/dashboard') : undefined}
+    />
+  );
+};
+
+const SuperAdminRoute: React.FC = () => {
+  const navigate = useNavigate();
+  return (
+    <SuperAdminDashboard
+      onBackToDashboard={() => navigate('/dashboard')}
+      onNavigateToLiveMode={(id) => navigate(`/events/${id}/live`)}
+      onNavigateToSummary={(id) => navigate(`/events/${id}/summary`)}
+    />
+  );
+};
+
+// ─── Main Router ──────────────────────────────────────────────────────────────
+const AppRoutes: React.FC = () => (
+  <ErrorBoundary>
+    <Suspense fallback={<LoadingScreen />}>
+      <Routes>
+        {/* Public marketing landing page */}
+        <Route
+          path="/"
+          element={
+            <PublicRoute>
+              <LandingRoute />
+            </PublicRoute>
+          }
+        />
+
+        {/* Public attendee route — accessible without login */}
+        <Route path="/public/register" element={<PublicRegisterRoute />} />
+
+        {/* Auth routes — redirect to dashboard if already logged in */}
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <LoginRoute />
+            </PublicRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicRoute>
+              <RegisterRoute />
+            </PublicRoute>
+          }
+        />
+
+        {/* Protected organizer routes */}
+        <Route
+          path="/dashboard"
+          element={
+            <PrivateRoute>
+              <ErrorBoundary>
+                <DashboardRoute />
+              </ErrorBoundary>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/events/:eventId/live"
+          element={
+            <PrivateRoute>
+              <ErrorBoundary>
+                <LiveModeRoute />
+              </ErrorBoundary>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/events/:eventId/summary"
+          element={
+            <PrivateRoute>
+              <ErrorBoundary>
+                <SummaryRoute />
+              </ErrorBoundary>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/events/:eventId/audit"
+          element={
+            <PrivateRoute>
+              <ErrorBoundary>
+                <AuditRoute />
+              </ErrorBoundary>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/super-admin"
+          element={
+            <PrivateRoute>
+              <ErrorBoundary>
+                <SuperAdminRoute />
+              </ErrorBoundary>
+            </PrivateRoute>
+          }
+        />
+
+        {/* Catch-all — redirect to dashboard (or login if unauthenticated) */}
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </Suspense>
+  </ErrorBoundary>
+);
+
+// ─── Root App ─────────────────────────────────────────────────────────────────
 export function App() {
   return (
-    <AuthProvider>
-      <OfflineSyncProvider>
-        <MainRouter />
-      </OfflineSyncProvider>
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <OfflineSyncProvider>
+          <AppRoutes />
+        </OfflineSyncProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

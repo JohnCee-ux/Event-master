@@ -40,10 +40,12 @@ const memoryDb_js_1 = require("../config/memoryDb.js");
 const EventSchema = new mongoose_1.Schema({
     name: { type: String, required: true, trim: true },
     description: { type: String, default: '', trim: true },
+    imageDataUrl: { type: String, default: null },
     date: { type: String, required: true },
     startTime: { type: String, required: true },
     venue: { type: String, required: true, trim: true },
     capacity: { type: Number, required: true, min: 1, default: 100 },
+    registeredCount: { type: Number, required: true, min: 0, default: 0 },
     status: {
         type: String,
         enum: ['DRAFT', 'UPCOMING', 'LIVE', 'ENDED'],
@@ -67,8 +69,13 @@ const EventSchema = new mongoose_1.Schema({
 const MongooseEvent = mongoose_1.default.model('Event', EventSchema);
 exports.Event = {
     findOne: (query) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.events.findOne(query) : MongooseEvent.findOne(query)),
+    findOneAndUpdate: (query, update) => (db_js_1.isUsingMemoryStore
+        ? memoryDb_js_1.memoryStore.events.findOneAndUpdate(query, update)
+        : MongooseEvent.findOneAndUpdate(query, update, { new: true })),
     findById: (id) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.events.findById(id) : MongooseEvent.findById(id)),
     create: (data) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.events.create(data) : MongooseEvent.create(data)),
     find: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.events.find(query) : MongooseEvent.find(query)),
     countDocuments: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.events.countDocuments(query) : MongooseEvent.countDocuments(query)),
+    findByIdAndDelete: (id) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.events.findByIdAndDelete(id) : MongooseEvent.findByIdAndDelete(id)),
+    deleteMany: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.events.deleteMany(query) : MongooseEvent.deleteMany(query)),
 };

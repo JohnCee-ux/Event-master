@@ -14,9 +14,18 @@ Built as an industrial training (SIWES) project.
 
 ## Tech Stack
 
-- **Client:** React + Vite (JavaScript/JSX), Tailwind CSS
-- **Server:** Express + MongoDB/Mongoose (JavaScript)
+- **Client:** React + Vite (TypeScript/TSX), Tailwind CSS
+- **Server:** Express + MongoDB/Mongoose (TypeScript)
 - **Auth:** JSON Web Tokens (JWT)
 - **Email:** Nodemailer
 - **QR generation:** `qrcode`
 - **QR scanning:** `@zxing/browser`
+
+## Local setup
+
+1. Install dependencies with `npm install`, `npm install --prefix server`, and `npm install --prefix client`.
+2. Copy `server/.env.example` to `server/.env` and set `JWT_SECRET` to a random value of at least 32 characters.
+3. Set `MONGO_URI` and `CLIENT_URL` in the server environment when using a remote database.
+4. Run both applications with `npm run dev`. The API uses port `5000` and the Vite client uses port `5173`.
+
+The organizer authentication options are password and email OTP. Google login is intentionally disabled until server-side OAuth token verification is configured.

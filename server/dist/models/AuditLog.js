@@ -75,4 +75,5 @@ exports.AuditLog = {
     create: (data) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.auditLogs.create(data) : MongooseAuditLog.create(data)),
     find: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.auditLogs.find(query) : MongooseAuditLog.find(query)),
     countDocuments: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.auditLogs.countDocuments(query) : MongooseAuditLog.countDocuments(query)),
+    deleteMany: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.auditLogs.deleteMany(query) : MongooseAuditLog.deleteMany(query)),
 };

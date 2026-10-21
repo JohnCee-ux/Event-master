@@ -77,9 +77,9 @@ router.post('/', rateLimiter_js_1.publicRegisterLimiter, async (req, res) => {
             });
             return;
         }
-        // Check event capacity
-        const currentAttendeeCount = await Attendee_js_1.Attendee.countDocuments({ eventId: event._id });
-        if (currentAttendeeCount >= event.capacity) {
+        // Reserve capacity atomically before creating the attendee.
+        const capacityReservation = await Event_js_1.Event.findOneAndUpdate({ _id: event._id, $or: [{ registeredCount: { $lt: event.capacity } }, { registeredCount: { $exists: false } }] }, { $inc: { registeredCount: 1 } });
+        if (!capacityReservation) {
             res.status(400).json({
                 error: 'Event capacity reached. This event is sold out.',
                 isSoldOut: true,
@@ -88,16 +88,23 @@ router.post('/', rateLimiter_js_1.publicRegisterLimiter, async (req, res) => {
         }
         // Generate secure ticket code and opaque QR token (no PII in QR payload)
         const { ticketCode, qrToken } = await (0, ticketService_js_1.createUniqueTicketCredentials)(event._id.toString(), event.prefix);
-        const attendee = await Attendee_js_1.Attendee.create({
-            eventId: event._id,
-            name: validated.name.trim(),
-            email: normalizedEmail,
-            ticketType: validated.ticketType.trim(),
-            ticketCode,
-            qrToken,
-            registeredAt: new Date(),
-            emailSent: false,
-        });
+        let attendee;
+        try {
+            attendee = await Attendee_js_1.Attendee.create({
+                eventId: event._id,
+                name: validated.name.trim(),
+                email: normalizedEmail,
+                ticketType: validated.ticketType.trim(),
+                ticketCode,
+                qrToken,
+                registeredAt: new Date(),
+                emailSent: false,
+            });
+        }
+        catch (createError) {
+            await Event_js_1.Event.findOneAndUpdate({ _id: event._id }, { $inc: { registeredCount: -1 } });
+            throw createError;
+        }
         // Write audit log
         await (0, auditService_js_1.logAuditEvent)({
             eventId: event._id,
@@ -164,6 +171,65 @@ router.post('/', rateLimiter_js_1.publicRegisterLimiter, async (req, res) => {
             return;
         }
         res.status(500).json({ error: err.message || 'Registration failed.' });
+    }
+});
+// Public Ticket & QR Lookup for Attendees
+router.post('/public-lookup', rateLimiter_js_1.publicLookupLimiter, async (req, res) => {
+    try {
+        const { email, ticketCode, eventId } = req.body;
+        const cleanEmail = (email || '').trim().toLowerCase();
+        const cleanCode = (ticketCode || '').trim().toUpperCase();
+        if (!eventId || !mongoose_1.default.Types.ObjectId.isValid(eventId)) {
+            res.status(400).json({ error: 'A valid event ID is required.' });
+            return;
+        }
+        if (!cleanEmail && !cleanCode) {
+            res.status(400).json({ error: 'Please provide either your registered email or your ticket code.' });
+            return;
+        }
+        const query = { eventId };
+        if (cleanCode) {
+            query.ticketCode = cleanCode;
+        }
+        else if (cleanEmail) {
+            query.email = cleanEmail;
+        }
+        const attendee = await Attendee_js_1.Attendee.findOne(query).sort({ registeredAt: -1 });
+        if (!attendee) {
+            res.status(404).json({ error: 'No ticket found matching the provided details.' });
+            return;
+        }
+        const event = await Event_js_1.Event.findById(attendee.eventId);
+        if (!event) {
+            res.status(404).json({ error: 'Associated event could not be found.' });
+            return;
+        }
+        const qrDataUrl = await (0, qrService_js_1.generateQRCodeDataUrl)(attendee.qrToken);
+        res.json({
+            success: true,
+            message: 'Ticket retrieved successfully!',
+            attendee: {
+                id: attendee._id.toString(),
+                name: attendee.name,
+                email: attendee.email,
+                ticketType: attendee.ticketType,
+                ticketCode: attendee.ticketCode,
+                qrToken: attendee.qrToken,
+                qrDataUrl,
+                registeredAt: attendee.registeredAt.toISOString(),
+                emailSent: attendee.emailSent,
+            },
+            event: {
+                id: event._id.toString(),
+                name: event.name,
+                venue: event.venue,
+                date: event.date,
+                startTime: event.startTime,
+            },
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message || 'Failed to retrieve ticket.' });
     }
 });
 // List attendees for organizer dashboard (Search, Filter, Pagination, Sort)
@@ -279,6 +345,10 @@ router.get('/lookup', authMiddleware_js_1.authMiddleware, ownershipMiddleware_js
 router.post('/checkin-code', authMiddleware_js_1.authMiddleware, ownershipMiddleware_js_1.requireEventOwnership, async (req, res) => {
     try {
         const event = req.event;
+        if (event.status !== 'LIVE') {
+            res.status(409).json({ error: 'Check-in is only available while the event is live.' });
+            return;
+        }
         const { code, deviceId, source } = req.body;
         const cleanCode = (code || '').trim();
         if (!cleanCode) {
@@ -333,11 +403,26 @@ router.post('/checkin-code', authMiddleware_js_1.authMiddleware, ownershipMiddle
             });
             return;
         }
-        // Valid check-in
+        // Atomically claim the attendee so concurrent scans cannot both succeed.
         const checkInTime = new Date();
-        attendee.checkedInAt = checkInTime;
-        attendee.checkedInBy = req.organizer.name || 'Door Staff';
-        await attendee.save();
+        const claimedAttendee = await Attendee_js_1.Attendee.findOneAndUpdate({ _id: attendee._id, checkedInAt: null }, { $set: { checkedInAt: checkInTime, checkedInBy: req.organizer.name || 'Door Staff' } });
+        if (!claimedAttendee) {
+            const latestAttendee = await Attendee_js_1.Attendee.findById(attendee._id);
+            res.status(200).json({
+                status: 'DUPLICATE',
+                message: 'Attendee is already checked in.',
+                attendee: latestAttendee ? {
+                    id: latestAttendee._id.toString(),
+                    name: latestAttendee.name,
+                    email: latestAttendee.email,
+                    ticketType: latestAttendee.ticketType,
+                    ticketCode: latestAttendee.ticketCode,
+                    checkedInAt: latestAttendee.checkedInAt?.toISOString(),
+                    originalCheckedInAt: latestAttendee.checkedInAt?.toISOString(),
+                } : undefined,
+            });
+            return;
+        }
         await (0, auditService_js_1.logAuditEvent)({
             eventId: event._id,
             attendeeId: attendee._id,
@@ -384,6 +469,10 @@ router.patch('/:id/checkin', authMiddleware_js_1.authMiddleware, async (req, res
             res.status(403).json({ error: 'Access denied. You do not own this event.' });
             return;
         }
+        if (event.status !== 'LIVE') {
+            res.status(409).json({ error: 'Check-in is only available while the event is live.' });
+            return;
+        }
         if (attendee.checkedInAt) {
             res.json({
                 status: 'DUPLICATE',
@@ -400,9 +489,11 @@ router.patch('/:id/checkin', authMiddleware_js_1.authMiddleware, async (req, res
             return;
         }
         const checkInTime = new Date();
-        attendee.checkedInAt = checkInTime;
-        attendee.checkedInBy = req.organizer.name;
-        await attendee.save();
+        const claimedAttendee = await Attendee_js_1.Attendee.findOneAndUpdate({ _id: attendee._id, checkedInAt: null }, { $set: { checkedInAt: checkInTime, checkedInBy: req.organizer.name } });
+        if (!claimedAttendee) {
+            res.json({ status: 'DUPLICATE', message: 'Attendee is already checked in.' });
+            return;
+        }
         await (0, auditService_js_1.logAuditEvent)({
             eventId: event._id,
             attendeeId: attendee._id,

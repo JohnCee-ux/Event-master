@@ -14,6 +14,7 @@ export interface IAttendeeDocument extends Document {
   checkedInBy?: string | null;
   emailSent: boolean;
   emailLastAttemptAt?: Date | null;
+  offlineScanIds: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +32,7 @@ const AttendeeSchema = new Schema<IAttendeeDocument>(
     checkedInBy: { type: String, default: null },
     emailSent: { type: Boolean, default: false },
     emailLastAttemptAt: { type: Date, default: null },
+    offlineScanIds: { type: [String], default: [] },
   },
   { timestamps: true }
 );
@@ -44,9 +46,16 @@ const MongooseAttendee = mongoose.model<IAttendeeDocument>('Attendee', AttendeeS
 
 export const Attendee: any = {
   findOne: (query: any) => (isUsingMemoryStore ? memoryStore.attendees.findOne(query) : MongooseAttendee.findOne(query)),
+  findOneAndUpdate: (query: any, update: any) => (
+    isUsingMemoryStore
+      ? memoryStore.attendees.findOneAndUpdate(query, update)
+      : MongooseAttendee.findOneAndUpdate(query, update, { new: true })
+  ),
   findById: (id: any) => (isUsingMemoryStore ? memoryStore.attendees.findById(id) : MongooseAttendee.findById(id)),
   create: (data: any) => (isUsingMemoryStore ? memoryStore.attendees.create(data) : MongooseAttendee.create(data)),
   find: (query: any = {}) => (isUsingMemoryStore ? memoryStore.attendees.find(query) : MongooseAttendee.find(query)),
   countDocuments: (query: any = {}) => (isUsingMemoryStore ? memoryStore.attendees.countDocuments(query) : MongooseAttendee.countDocuments(query)),
   aggregate: (pipeline: any[]) => (isUsingMemoryStore ? memoryStore.attendees.aggregate(pipeline) : MongooseAttendee.aggregate(pipeline)),
+  deleteMany: (query: any = {}) => (isUsingMemoryStore ? memoryStore.attendees.deleteMany(query) : MongooseAttendee.deleteMany(query)),
+  findByIdAndDelete: (id: any) => (isUsingMemoryStore ? memoryStore.attendees.findByIdAndDelete(id) : MongooseAttendee.findByIdAndDelete(id)),
 };

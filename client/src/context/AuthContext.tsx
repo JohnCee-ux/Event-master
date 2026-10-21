@@ -8,6 +8,8 @@ interface AuthContextType {
   isLoading: boolean;
   login: (data: { email: string; password: string }) => Promise<void>;
   register: (data: { name: string; email: string; password: string }) => Promise<void>;
+  sendOtp: (email: string) => Promise<{ success: boolean; message: string; previewUrl?: string }>;
+  loginWithOtp: (email: string, otp: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -20,16 +22,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshUser = async () => {
     try {
-      const token = localStorage.getItem('gatekeeper_token');
-      if (!token) {
-        setOrganizer(null);
-        setIsLoading(false);
-        return;
-      }
+      // The httpOnly cookie is sent automatically by the browser.
+      // If it's missing or expired, getMe() will throw a 401.
       const res = await api.getMe();
       setOrganizer(res.organizer);
     } catch {
-      localStorage.removeItem('gatekeeper_token');
       setOrganizer(null);
     } finally {
       setIsLoading(false);
@@ -50,6 +47,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOrganizer(res.organizer);
   };
 
+  const sendOtp = async (email: string) => {
+    return await api.sendOtp(email);
+  };
+
+  const loginWithOtp = async (email: string, otp: string) => {
+    const res = await api.verifyOtp(email, otp);
+    setOrganizer(res.organizer);
+  };
+
   const logout = async () => {
     try {
       await api.logoutOrganizer();
@@ -66,6 +72,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         register,
+        sendOtp,
+        loginWithOtp,
         logout,
         refreshUser,
       }}

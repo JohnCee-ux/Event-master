@@ -33,8 +33,12 @@ class MemoryCollection {
                 continue;
             }
             if (val && typeof val === 'object') {
+                if ('$lt' in val && !(item[key] < val.$lt))
+                    return false;
+                if ('$exists' in val && (item[key] !== undefined) !== val.$exists)
+                    return false;
                 if ('$ne' in val) {
-                    if (item[key] === val.$ne)
+                    if (Array.isArray(item[key]) ? item[key].includes(val.$ne) : item[key] === val.$ne)
                         return false;
                     if (val.$ne === null && (item[key] === null || item[key] === undefined))
                         return false;
@@ -61,6 +65,26 @@ class MemoryCollection {
             return null;
         return this.wrapDoc(found);
     }
+    async findOneAndUpdate(query, update) {
+        const index = this.items.findIndex((item) => this.matchQuery(item, query));
+        if (index < 0)
+            return null;
+        const changes = update.$set || {};
+        const increments = update.$inc || {};
+        const additions = update.$addToSet || {};
+        const updated = { ...this.items[index], ...changes };
+        Object.keys(increments).forEach((key) => {
+            updated[key] = (updated[key] || 0) + increments[key];
+        });
+        Object.keys(additions).forEach((key) => {
+            const values = Array.isArray(updated[key]) ? updated[key] : [];
+            if (!values.includes(additions[key]))
+                values.push(additions[key]);
+            updated[key] = values;
+        });
+        this.items[index] = { ...updated, updatedAt: new Date() };
+        return this.wrapDoc(this.items[index]);
+    }
     async findById(id) {
         const strId = id ? id.toString() : '';
         const found = this.items.find((item) => item._id === strId);
@@ -70,6 +94,26 @@ class MemoryCollection {
     }
     async countDocuments(query = {}) {
         return this.items.filter((item) => this.matchQuery(item, query)).length;
+    }
+    async deleteMany(query = {}) {
+        const beforeCount = this.items.length;
+        this.items = this.items.filter((item) => !this.matchQuery(item, query));
+        return { deletedCount: beforeCount - this.items.length };
+    }
+    async findByIdAndDelete(id) {
+        const strId = id ? id.toString() : '';
+        const index = this.items.findIndex((item) => item._id === strId);
+        if (index < 0)
+            return null;
+        const removed = this.items.splice(index, 1)[0];
+        return this.wrapDoc(removed);
+    }
+    async deleteOne(query = {}) {
+        const index = this.items.findIndex((item) => this.matchQuery(item, query));
+        if (index < 0)
+            return { deletedCount: 0 };
+        this.items.splice(index, 1);
+        return { deletedCount: 1 };
     }
     find(query = {}) {
         let results = this.items.filter((item) => this.matchQuery(item, query));

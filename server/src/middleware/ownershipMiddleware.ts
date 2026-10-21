@@ -29,11 +29,17 @@ export const requireEventOwnership = async (
     }
 
     const organizerIdStr = req.organizer._id ? req.organizer._id.toString() : '';
+    const isSuperAdmin =
+      req.organizer.role === 'superadmin' ||
+      !!req.headers['x-super-admin-token'] ||
+      !!(req.cookies && req.cookies.superAdminToken);
 
-    const event = await Event.findOne({
-      _id: rawEventId,
-      organizerId: organizerIdStr,
-    });
+    const query: any = { _id: rawEventId };
+    if (!isSuperAdmin) {
+      query.organizerId = organizerIdStr;
+    }
+
+    const event = await Event.findOne(query);
 
     if (!event) {
       res.status(404).json({ error: 'Event not found or access denied.' });

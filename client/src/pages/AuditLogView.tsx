@@ -68,7 +68,7 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ eventId, onBack }) =
   };
 
   return (
-    <div className="min-h-screen bg-background text-gray-100 p-4 sm:p-8 flex flex-col items-center">
+    <div className="page-shell text-gray-100 p-4 sm:p-8 flex flex-col items-center">
       <div className="max-w-5xl w-full space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-surface-border">

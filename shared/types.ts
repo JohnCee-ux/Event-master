@@ -6,6 +6,7 @@ export interface IOrganizer {
   id: string;
   name: string;
   email: string;
+  role?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -14,6 +15,7 @@ export interface IEvent {
   id: string;
   name: string;
   description: string;
+  imageDataUrl?: string | null;
   date: string;
   startTime: string;
   venue: string;

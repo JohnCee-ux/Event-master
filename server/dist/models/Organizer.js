@@ -41,6 +41,7 @@ const OrganizerSchema = new mongoose_1.Schema({
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
     passwordHash: { type: String, required: true },
+    role: { type: String, enum: ['organizer', 'superadmin'], default: 'organizer' },
 }, { timestamps: true });
 const MongooseOrganizer = mongoose_1.default.model('Organizer', OrganizerSchema);
 exports.Organizer = {
@@ -49,4 +50,7 @@ exports.Organizer = {
     create: (data) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.create(data) : MongooseOrganizer.create(data)),
     find: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.find(query) : MongooseOrganizer.find(query)),
     countDocuments: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.countDocuments(query) : MongooseOrganizer.countDocuments(query)),
+    findByIdAndDelete: (id) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.findByIdAndDelete(id) : MongooseOrganizer.findByIdAndDelete(id)),
+    deleteOne: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.deleteOne(query) : MongooseOrganizer.deleteOne(query)),
+    deleteMany: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.deleteMany(query) : MongooseOrganizer.deleteMany(query)),
 };

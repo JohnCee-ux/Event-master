@@ -29,8 +29,10 @@ export class MemoryCollection<T extends { _id?: any }> {
       }
 
       if (val && typeof val === 'object') {
+        if ('$lt' in val && !(item[key] < val.$lt)) return false;
+        if ('$exists' in val && (item[key] !== undefined) !== val.$exists) return false;
         if ('$ne' in val) {
-          if (item[key] === val.$ne) return false;
+          if (Array.isArray(item[key]) ? item[key].includes(val.$ne) : item[key] === val.$ne) return false;
           if (val.$ne === null && (item[key] === null || item[key] === undefined)) return false;
           continue;
         }
@@ -56,6 +58,26 @@ export class MemoryCollection<T extends { _id?: any }> {
     return this.wrapDoc(found);
   }
 
+  public async findOneAndUpdate(query: any, update: any): Promise<any | null> {
+    const index = this.items.findIndex((item) => this.matchQuery(item, query));
+    if (index < 0) return null;
+
+    const changes = update.$set || {};
+    const increments = update.$inc || {};
+    const additions = update.$addToSet || {};
+    const updated = { ...this.items[index], ...changes } as any;
+    Object.keys(increments).forEach((key) => {
+      updated[key] = (updated[key] || 0) + increments[key];
+    });
+    Object.keys(additions).forEach((key) => {
+      const values = Array.isArray(updated[key]) ? updated[key] : [];
+      if (!values.includes(additions[key])) values.push(additions[key]);
+      updated[key] = values;
+    });
+    this.items[index] = { ...updated, updatedAt: new Date() };
+    return this.wrapDoc(this.items[index]);
+  }
+
   public async findById(id: string | any): Promise<any | null> {
     const strId = id ? id.toString() : '';
     const found = this.items.find((item) => item._id === strId);
@@ -65,6 +87,27 @@ export class MemoryCollection<T extends { _id?: any }> {
 
   public async countDocuments(query: any = {}): Promise<number> {
     return this.items.filter((item) => this.matchQuery(item, query)).length;
+  }
+
+  public async deleteMany(query: any = {}): Promise<{ deletedCount: number }> {
+    const beforeCount = this.items.length;
+    this.items = this.items.filter((item) => !this.matchQuery(item, query));
+    return { deletedCount: beforeCount - this.items.length };
+  }
+
+  public async findByIdAndDelete(id: string | any): Promise<any | null> {
+    const strId = id ? id.toString() : '';
+    const index = this.items.findIndex((item) => item._id === strId);
+    if (index < 0) return null;
+    const removed = this.items.splice(index, 1)[0];
+    return this.wrapDoc(removed);
+  }
+
+  public async deleteOne(query: any = {}): Promise<{ deletedCount: number }> {
+    const index = this.items.findIndex((item) => this.matchQuery(item, query));
+    if (index < 0) return { deletedCount: 0 };
+    this.items.splice(index, 1);
+    return { deletedCount: 1 };
   }
 
   public find(query: any = {}): any {

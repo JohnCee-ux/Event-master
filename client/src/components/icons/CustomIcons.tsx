@@ -271,3 +271,75 @@ export const HistoryIcon: React.FC<IconProps> = ({ size, className, ...props }) 
     <polyline points="12 7 12 12 15 15" />
   </svg>
 );
+
+export const EyeIcon: React.FC<IconProps> = ({ size, className, ...props }) => (
+  <svg {...defaultProps} width={size || 24} height={size || 24} className={className} {...props}>
+    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+export const EyeOffIcon: React.FC<IconProps> = ({ size, className, ...props }) => (
+  <svg {...defaultProps} width={size || 24} height={size || 24} className={className} {...props}>
+    <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+    <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+    <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+    <line x1="2" y1="2" x2="22" y2="22" />
+  </svg>
+);
+
+export const ZapIcon: React.FC<IconProps> = ({ size, className, ...props }) => (
+  <svg {...defaultProps} width={size || 24} height={size || 24} className={className} {...props}>
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  </svg>
+);
+
+export const QrCodeIcon: React.FC<IconProps> = ({ size, className, ...props }) => (
+  <svg {...defaultProps} width={size || 24} height={size || 24} className={className} {...props}>
+    <rect width="5" height="5" x="3" y="3" rx="1" />
+    <rect width="5" height="5" x="16" y="3" rx="1" />
+    <rect width="5" height="5" x="3" y="16" rx="1" />
+    <path d="M21 16h-3a2 2 0 0 0-2 2v3" />
+    <path d="M21 21v.01" />
+    <path d="M12 7v3a2 2 0 0 1-2 2H7" />
+    <path d="M3 12h.01" />
+    <path d="M12 3h.01" />
+    <path d="M12 16v.01" />
+    <path d="M16 12h1" />
+    <path d="M21 12v.01" />
+    <path d="M12 21v-1" />
+  </svg>
+);
+
+export const CopyIcon: React.FC<IconProps> = ({ size, className, ...props }) => (
+  <svg {...defaultProps} width={size || 24} height={size || 24} className={className} {...props}>
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+  </svg>
+);
+
+export const ExternalLinkIcon: React.FC<IconProps> = ({ size, className, ...props }) => (
+  <svg {...defaultProps} width={size || 24} height={size || 24} className={className} {...props}>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" />
+    <line x1="10" y1="14" x2="21" y2="3" />
+  </svg>
+);
+
+export const TrendingUpIcon: React.FC<IconProps> = ({ size, className, ...props }) => (
+  <svg {...defaultProps} width={size || 24} height={size || 24} className={className} {...props}>
+    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+    <polyline points="17 6 23 6 23 12" />
+  </svg>
+);
+
+export const WifiOffIcon: React.FC<IconProps> = ({ size, className, ...props }) => (
+  <svg {...defaultProps} width={size || 24} height={size || 24} className={className} {...props}>
+    <line x1="2" y1="2" x2="22" y2="22" />
+    <path d="M8.5 16.5a5 5 0 0 1 7 0" />
+    <path d="M2 8.82a15 15 0 0 1 4.17-2.65" />
+    <path d="M10.66 5c4.01-.36 8.14.9 11.34 3.82" />
+    <path d="M5 12.86A10 10 0 0 1 19 12.86" />
+  </svg>
+);
+

@@ -49,6 +49,7 @@ const AttendeeSchema = new mongoose_1.Schema({
     checkedInBy: { type: String, default: null },
     emailSent: { type: Boolean, default: false },
     emailLastAttemptAt: { type: Date, default: null },
+    offlineScanIds: { type: [String], default: [] },
 }, { timestamps: true });
 AttendeeSchema.index({ eventId: 1, email: 1 }, { unique: true });
 AttendeeSchema.index({ eventId: 1, ticketCode: 1 }, { unique: true });
@@ -57,9 +58,14 @@ AttendeeSchema.index({ eventId: 1, qrToken: 1 });
 const MongooseAttendee = mongoose_1.default.model('Attendee', AttendeeSchema);
 exports.Attendee = {
     findOne: (query) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.attendees.findOne(query) : MongooseAttendee.findOne(query)),
+    findOneAndUpdate: (query, update) => (db_js_1.isUsingMemoryStore
+        ? memoryDb_js_1.memoryStore.attendees.findOneAndUpdate(query, update)
+        : MongooseAttendee.findOneAndUpdate(query, update, { new: true })),
     findById: (id) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.attendees.findById(id) : MongooseAttendee.findById(id)),
     create: (data) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.attendees.create(data) : MongooseAttendee.create(data)),
     find: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.attendees.find(query) : MongooseAttendee.find(query)),
     countDocuments: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.attendees.countDocuments(query) : MongooseAttendee.countDocuments(query)),
     aggregate: (pipeline) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.attendees.aggregate(pipeline) : MongooseAttendee.aggregate(pipeline)),
+    deleteMany: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.attendees.deleteMany(query) : MongooseAttendee.deleteMany(query)),
+    findByIdAndDelete: (id) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.attendees.findByIdAndDelete(id) : MongooseAttendee.findByIdAndDelete(id)),
 };

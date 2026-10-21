@@ -48,7 +48,7 @@ export const PostEventSummary: React.FC<PostEventSummaryProps> = ({ eventId, onB
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="page-shell flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 border-2 border-brand-blue border-t-transparent rounded-full animate-spin" />
           <span className="text-sm text-gray-400">Compiling post-event analytics...</span>
@@ -59,7 +59,7 @@ export const PostEventSummary: React.FC<PostEventSummaryProps> = ({ eventId, onB
 
   if (error || !summary) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="page-shell flex items-center justify-center p-4">
         <div className="panel max-w-md w-full p-8 text-center">
           <h2 className="text-lg font-bold text-white mb-2">Summary Unavailable</h2>
           <p className="text-sm text-gray-400 mb-6">{error || 'Could not load summary.'}</p>
@@ -72,7 +72,7 @@ export const PostEventSummary: React.FC<PostEventSummaryProps> = ({ eventId, onB
   }
 
   return (
-    <div className="min-h-screen bg-background text-gray-100 p-4 sm:p-8 flex flex-col items-center">
+    <div className="page-shell text-gray-100 p-4 sm:p-8 flex flex-col items-center">
       <div className="max-w-5xl w-full space-y-6">
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-surface-border">

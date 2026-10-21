@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { BrowserQRCodeReader, IScannerControls } from '@zxing/browser';
+import { Pause, Play, StopCircle } from 'lucide-react';
 import { api } from '../api/apiClient.js';
 import { useOfflineSync } from '../context/OfflineSyncContext.js';
 import { audioFeedback } from '../utils/audioFeedback.js';
@@ -78,6 +79,9 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
   // End Event Modal State
   const [showEndModal, setShowEndModal] = useState(false);
   const [endingEvent, setEndingEvent] = useState(false);
+
+  // Stop Live Scan Modal State
+  const [showStopScanModal, setShowStopScanModal] = useState(false);
 
   // Fetch Event & Live Analytics
   const loadEventData = useCallback(async () => {
@@ -269,7 +273,28 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
   useEffect(() => {
     let active = true;
 
+    const stopCameraTracks = () => {
+      try {
+        controlsRef.current?.stop();
+        controlsRef.current = null;
+      } catch {}
+      if (videoRef.current && videoRef.current.srcObject) {
+        try {
+          const stream = videoRef.current.srcObject as MediaStream;
+          stream.getTracks().forEach((track) => track.stop());
+          videoRef.current.srcObject = null;
+        } catch {}
+      }
+      setTorchOn(false);
+      setHasTorch(false);
+    };
+
     const initScanner = async () => {
+      if (!isScanning) {
+        stopCameraTracks();
+        return;
+      }
+
       try {
         const devices = await BrowserQRCodeReader.listVideoInputDevices();
         if (!active) return;
@@ -327,7 +352,7 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
 
     return () => {
       active = false;
-      controlsRef.current?.stop();
+      stopCameraTracks();
     };
   }, [selectedDeviceId, isScanning, processCode]);
 
@@ -384,9 +409,9 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
   };
 
   return (
-    <div className="min-h-screen bg-background text-gray-100 flex flex-col">
+    <div className="page-shell text-gray-100 flex flex-col">
       {/* Top Operational Bar */}
-      <header className="bg-surface border-b border-surface-border px-4 py-3 sticky top-0 z-30">
+      <header className="bg-[#060918]/80 backdrop-blur-xl border-b border-white/10 px-4 py-3 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           {/* Left: Exit & Event Identity */}
           <div className="flex items-center gap-3">
@@ -463,6 +488,16 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
               {soundEnabled ? <SoundOnIcon size={18} /> : <SoundOffIcon size={18} />}
             </button>
 
+            {/* Stop Live Scan Button */}
+            <button
+              onClick={() => setShowStopScanModal(true)}
+              className="btn-amber px-3 py-1.5 text-xs font-semibold gap-1.5 shadow-sm"
+              title="Stop live scanning session"
+            >
+              <StopCircle size={15} />
+              <span className="hidden sm:inline">Stop Live Scan</span>
+            </button>
+
             {/* End Event Button */}
             <button
               onClick={() => setShowEndModal(true)}
@@ -507,29 +542,60 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
             {/* Live Video Feed */}
             <video
               ref={videoRef}
-              className="w-full h-full object-cover rounded-xl"
+              className={`w-full h-full object-cover rounded-xl ${!isScanning ? 'hidden' : ''}`}
               playsInline
               muted
               autoPlay
             />
 
-            {/* Corner-bracket Viewfinder Overlay (over camera feed) */}
-            <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
-              <div className="w-56 h-56 sm:w-64 sm:h-64 relative border-2 border-transparent">
-                {/* 4 Corner Brackets */}
-                <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand-blue rounded-tl-lg" />
-                <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-brand-blue rounded-tr-lg" />
-                <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-brand-blue rounded-bl-lg" />
-                <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-blue rounded-br-lg" />
+            {/* Viewfinder Overlay (when active) or Paused Screen (when stopped) */}
+            {isScanning ? (
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
+                <div className="w-56 h-56 sm:w-64 sm:h-64 relative border-2 border-transparent">
+                  {/* 4 Corner Brackets */}
+                  <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand-blue rounded-tl-lg" />
+                  <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-brand-blue rounded-tr-lg" />
+                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-brand-blue rounded-bl-lg" />
+                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-blue rounded-br-lg" />
 
-                {/* Animated Scan Line */}
-                <div className="w-full h-0.5 bg-brand-cyan animate-scan-line absolute top-1/2" />
+                  {/* Animated Scan Line */}
+                  <div className="w-full h-0.5 bg-brand-cyan animate-scan-line absolute top-1/2" />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-slate-950/90 backdrop-blur-sm z-10 animate-fade-in">
+                <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mb-4 shadow-lg shadow-amber-500/10">
+                  <Pause size={28} />
+                </div>
+                <div className="inline-block px-3 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold uppercase tracking-wider mb-2">
+                  Scanner Stopped
+                </div>
+                <h3 className="text-lg font-bold text-white mb-1">Live Camera Deactivated</h3>
+                <p className="text-xs text-slate-400 max-w-sm mb-6">
+                  QR decoding is paused and camera hardware is released. You can resume scanning or return to the dashboard.
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={() => setIsScanning(true)}
+                    className="btn-primary px-5 py-2.5 text-xs font-bold gap-2 shadow-lg shadow-brand-purple/30"
+                  >
+                    <Play size={14} className="fill-current" />
+                    Resume Live Scan
+                  </button>
+                  <button
+                    onClick={onExit}
+                    className="btn-glass px-4 py-2.5 text-xs font-semibold gap-1.5"
+                  >
+                    <ArrowLeftIcon size={14} />
+                    Exit to Dashboard
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Camera Floating Controls (bottom glass overlay) */}
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 glass-panel px-4 py-2 rounded-full flex items-center gap-4 z-10">
-              {videoDevices.length > 1 && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 glass-panel px-4 py-2 rounded-full flex items-center gap-4 z-20">
+              {videoDevices.length > 1 && isScanning && (
                 <button
                   onClick={handleSwitchCamera}
                   className="text-gray-300 hover:text-white transition-colors"
@@ -538,7 +604,7 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
                   <CameraSwitchIcon size={20} />
                 </button>
               )}
-              {hasTorch && (
+              {hasTorch && isScanning && (
                 <button
                   onClick={handleToggleTorch}
                   className={`transition-colors ${torchOn ? 'text-signal-yellow' : 'text-gray-300 hover:text-white'}`}
@@ -549,11 +615,23 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
               )}
               <button
                 onClick={() => setIsScanning(!isScanning)}
-                className={`text-xs font-semibold px-3 py-1 rounded-full ${
-                  isScanning ? 'bg-signal-green/20 text-signal-green border border-signal-green/40' : 'bg-signal-red/20 text-signal-red'
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5 transition-colors ${
+                  isScanning
+                    ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                    : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40'
                 }`}
               >
-                {isScanning ? 'Scanning Active' : 'Scanner Paused'}
+                {isScanning ? (
+                  <>
+                    <Pause size={12} className="fill-current" />
+                    <span>Stop Scan</span>
+                  </>
+                ) : (
+                  <>
+                    <Play size={12} className="fill-current" />
+                    <span>Resume Scan</span>
+                  </>
+                )}
               </button>
             </div>
 
@@ -764,6 +842,60 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
                 className="btn-danger text-xs font-semibold"
               >
                 {endingEvent ? 'Ending Event...' : 'Yes, End Event'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stop Live Scan Modal */}
+      {showStopScanModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-scale-in" onClick={() => setShowStopScanModal(false)}>
+          <div className="panel max-w-md w-full p-6 border-amber-500/30 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                <StopCircle size={22} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Stop Live Scanner</h3>
+                <p className="text-xs text-slate-400">Pause camera or return to dashboard</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 mb-5 leading-relaxed">
+              Stopping the live scanner will deactivate the camera and QR decoding. The event will remain <strong className="text-emerald-400">LIVE</strong> so you can resume scanning or let other gate personnel continue anytime.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 justify-end pt-2 border-t border-white/5">
+              <button
+                type="button"
+                onClick={() => setShowStopScanModal(false)}
+                className="btn-secondary text-xs py-2 px-3 order-3 sm:order-1"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsScanning(false);
+                  setShowStopScanModal(false);
+                }}
+                className="btn-glass text-xs py-2 px-3 border-amber-500/30 text-amber-300 hover:bg-amber-500/10 flex items-center justify-center gap-1.5 order-2"
+              >
+                <Pause size={13} className="fill-current" />
+                Pause Scanner Here
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsScanning(false);
+                  setShowStopScanModal(false);
+                  onExit();
+                }}
+                className="btn-amber text-xs py-2 px-3 font-semibold flex items-center justify-center gap-1.5 order-1 sm:order-3"
+              >
+                <StopCircle size={14} />
+                Stop & Exit to Dashboard
               </button>
             </div>
           </div>

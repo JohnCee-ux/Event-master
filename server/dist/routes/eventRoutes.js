@@ -9,9 +9,16 @@ const authMiddleware_js_1 = require("../middleware/authMiddleware.js");
 const ownershipMiddleware_js_1 = require("../middleware/ownershipMiddleware.js");
 const auditService_js_1 = require("../services/auditService.js");
 const router = (0, express_1.Router)();
+const eventImageSchema = zod_1.z
+    .string()
+    .regex(/^data:image\/(png|jpeg|jpg|webp|gif);base64,[A-Za-z0-9+/]+=*$/, 'Event graphic must be a valid image.')
+    .max(4 * 1024 * 1024, 'Event graphic must be 3 MB or smaller.')
+    .nullable()
+    .optional();
 const createEventSchema = zod_1.z.object({
     name: zod_1.z.string().min(3, 'Event name must be at least 3 characters'),
     description: zod_1.z.string().optional().default(''),
+    imageDataUrl: eventImageSchema,
     date: zod_1.z.string().min(1, 'Date is required'),
     startTime: zod_1.z.string().min(1, 'Start time is required'),
     venue: zod_1.z.string().min(2, 'Venue is required'),
@@ -51,6 +58,7 @@ router.get('/', authMiddleware_js_1.authMiddleware, async (req, res) => {
                 id: evt._id.toString(),
                 name: evt.name,
                 description: evt.description,
+                imageDataUrl: evt.imageDataUrl || null,
                 date: evt.date,
                 startTime: evt.startTime,
                 venue: evt.venue,
@@ -94,6 +102,7 @@ router.post('/', authMiddleware_js_1.authMiddleware, async (req, res) => {
                 id: event._id.toString(),
                 name: event.name,
                 description: event.description,
+                imageDataUrl: event.imageDataUrl || null,
                 date: event.date,
                 startTime: event.startTime,
                 venue: event.venue,
@@ -118,6 +127,46 @@ router.post('/', authMiddleware_js_1.authMiddleware, async (req, res) => {
         res.status(500).json({ error: err.message || 'Failed to create event.' });
     }
 });
+// Public list of active events open for attendee registration
+router.get('/public', async (_req, res) => {
+    try {
+        const events = await Event_js_1.Event.find({
+            status: { $in: ['UPCOMING', 'LIVE'] },
+        })
+            .sort({ createdAt: -1 })
+            .lean();
+        const eventIds = events.map((e) => e._id);
+        const counts = await Attendee_js_1.Attendee.aggregate([
+            { $match: { eventId: { $in: eventIds } } },
+            { $group: { _id: '$eventId', registeredCount: { $sum: 1 } } },
+        ]);
+        const countMap = new Map();
+        counts.forEach((c) => {
+            countMap.set(c._id.toString(), c.registeredCount);
+        });
+        const publicEvents = events.map((evt) => {
+            const reg = countMap.get(evt._id.toString()) || 0;
+            return {
+                id: evt._id.toString(),
+                name: evt.name,
+                description: evt.description,
+                imageDataUrl: evt.imageDataUrl || null,
+                date: evt.date,
+                startTime: evt.startTime,
+                venue: evt.venue,
+                capacity: evt.capacity,
+                status: evt.status,
+                prefix: evt.prefix,
+                registeredCount: reg,
+                isSoldOut: reg >= evt.capacity,
+            };
+        });
+        res.json({ events: publicEvents });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message || 'Failed to list public events.' });
+    }
+});
 // Public event info route (for attendee registration page)
 router.get('/public/:id', async (req, res) => {
     try {
@@ -133,6 +182,7 @@ router.get('/public/:id', async (req, res) => {
                 id: event._id.toString(),
                 name: event.name,
                 description: event.description,
+                imageDataUrl: event.imageDataUrl || null,
                 date: event.date,
                 startTime: event.startTime,
                 venue: event.venue,
@@ -158,6 +208,7 @@ router.get('/:id', authMiddleware_js_1.authMiddleware, ownershipMiddleware_js_1.
             id: event._id.toString(),
             name: event.name,
             description: event.description,
+            imageDataUrl: event.imageDataUrl || null,
             date: event.date,
             startTime: event.startTime,
             venue: event.venue,
@@ -491,6 +542,26 @@ router.get('/:id/export/attendees.csv', authMiddleware_js_1.authMiddleware, owne
     }
     catch (err) {
         res.status(500).json({ error: err.message || 'Failed to export CSV.' });
+    }
+});
+// Delete event and cascading records (authorized organizer ownership verified)
+router.delete('/:id', authMiddleware_js_1.authMiddleware, ownershipMiddleware_js_1.requireEventOwnership, async (req, res) => {
+    try {
+        const event = req.event;
+        const eventId = event._id;
+        // Cascade delete attendees & audit logs for this event
+        const deletedAttendees = await Attendee_js_1.Attendee.deleteMany({ eventId });
+        await AuditLog_js_1.AuditLog.deleteMany({ eventId });
+        // Delete the event
+        await Event_js_1.Event.findByIdAndDelete(eventId);
+        res.json({
+            success: true,
+            message: `Event "${event.name}" and all associated data deleted successfully.`,
+            deletedAttendeesCount: deletedAttendees?.deletedCount || 0,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message || 'Failed to delete event.' });
     }
 });
 exports.default = router;

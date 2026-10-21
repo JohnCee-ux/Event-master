@@ -6,7 +6,13 @@ export interface AuthenticatedRequest extends Request {
   organizer?: IOrganizerDocument;
 }
 
-export const JWT_SECRET = process.env.JWT_SECRET || 'gatekeeper-production-super-secret-key-2026';
+export const getJwtSecret = (): string => {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (!secret || secret.length < 32) {
+    throw new Error('JWT_SECRET must be configured with at least 32 characters.');
+  }
+  return secret;
+};
 
 export const authMiddleware = async (
   req: AuthenticatedRequest,
@@ -30,7 +36,7 @@ export const authMiddleware = async (
       return;
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: string; email: string };
+    const decoded = jwt.verify(token, getJwtSecret()) as { id: string; email: string };
     const organizer = await Organizer.findById(decoded.id);
 
     if (!organizer) {
