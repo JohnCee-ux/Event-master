@@ -80,6 +80,7 @@ export interface SendTicketEmailParams {
   ticketType: string;
   ticketCode: string;
   qrDataUrl: string;
+  imageDataUrl?: string | null;
 }
 
 export const sendTicketEmail = async (
@@ -100,6 +101,18 @@ export const sendTicketEmail = async (
     const base64Data = qrMatch ? qrMatch[1] : params.qrDataUrl;
     const qrBuffer = Buffer.from(base64Data, 'base64');
 
+    // Parse event graphic attachment if provided
+    let graphicBuffer: Buffer | null = null;
+    let graphicFilename = 'event-banner.png';
+    if (params.imageDataUrl) {
+      const gMatch = params.imageDataUrl.match(/^data:image\/(\w+);base64,(.+)$/s);
+      if (gMatch) {
+        const ext = gMatch[1] === 'jpeg' ? 'jpg' : gMatch[1];
+        graphicFilename = `event-graphic-${params.ticketCode}.${ext}`;
+        graphicBuffer = Buffer.from(gMatch[2], 'base64');
+      }
+    }
+
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -108,6 +121,7 @@ export const sendTicketEmail = async (
         <style>
           body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0A0F1C; color: #F3F4F6; margin: 0; padding: 24px; }
           .card { max-width: 520px; margin: 0 auto; background-color: #111827; border: 1px solid #1F2937; border-radius: 16px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+          .event-banner { width: 100%; max-height: 220px; object-fit: cover; display: block; border-bottom: 1px solid #1F2937; }
           .header { background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 50%, #EC4899 100%); padding: 32px 24px; text-align: center; }
           .header h1 { margin: 0; color: #FFFFFF; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
           .header p { margin: 8px 0 0 0; color: rgba(255, 255, 255, 0.85); font-size: 14px; }
@@ -126,6 +140,13 @@ export const sendTicketEmail = async (
       </head>
       <body>
         <div class="card">
+          ${
+            params.imageDataUrl
+              ? `<div style="background-color: #080C1A; text-align: center; overflow: hidden; border-bottom: 1px solid #1F2937;">
+                   <img src="${params.imageDataUrl}" alt="${safe.eventName} Graphics" class="event-banner" style="width: 100%; max-height: 220px; object-fit: cover; display: block;" />
+                 </div>`
+              : ''
+          }
           <div class="header">
             <h1>${safe.eventName}</h1>
             <p>Official Event Entry Ticket</p>
@@ -138,7 +159,7 @@ export const sendTicketEmail = async (
                 <img src="${params.qrDataUrl}" alt="QR Ticket" width="200" height="200" style="display: block; border-radius: 6px;" />
               </div>
               <p style="font-size: 12px; color: #9CA3AF; margin: 4px 0 0 0;">
-                (Your entry QR code is also attached as <strong>ticket-qr.png</strong>)
+                (Your entry QR code is attached as <strong>ticket-${params.ticketCode}.png</strong>${graphicBuffer ? ` and official graphic as <strong>${graphicFilename}</strong>` : ''})
               </p>
             </div>
 
@@ -179,6 +200,21 @@ export const sendTicketEmail = async (
       </html>
     `;
 
+    // Construct attachments
+    const emailAttachments: any[] = [
+      {
+        filename: `ticket-${params.ticketCode}.png`,
+        content: qrBuffer,
+      },
+    ];
+
+    if (graphicBuffer) {
+      emailAttachments.push({
+        filename: graphicFilename,
+        content: graphicBuffer,
+      });
+    }
+
     const resend = getResendClient();
 
     if (resend) {
@@ -187,12 +223,7 @@ export const sendTicketEmail = async (
         to: [params.toEmail],
         subject: `Your Ticket for ${params.eventName} (${params.ticketCode})`,
         html: htmlContent,
-        attachments: [
-          {
-            filename: `ticket-${params.ticketCode}.png`,
-            content: qrBuffer,
-          },
-        ],
+        attachments: emailAttachments,
       });
 
       if (error) {
@@ -212,13 +243,7 @@ export const sendTicketEmail = async (
       to: params.toEmail,
       subject: `Your Ticket for ${params.eventName} (${params.ticketCode})`,
       html: htmlContent,
-      attachments: [
-        {
-          filename: 'ticket-qr.png',
-          content: qrBuffer,
-          cid: 'ticket-qr',
-        },
-      ],
+      attachments: emailAttachments,
     });
 
     const previewUrl = nodemailer.getTestMessageUrl(info) || undefined;

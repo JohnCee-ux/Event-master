@@ -86,7 +86,7 @@ const startServer = async () => {
             throw new Error('JWT_SECRET must be configured with at least 32 characters.');
         }
         await (0, db_js_1.connectDB)();
-        serverInstance = app.listen(PORT, () => {
+        serverInstance = app.listen(Number(PORT), '0.0.0.0', () => {
             console.log(`=========================================`);
             console.log(` GateKeeper API running on port ${PORT}`);
             console.log(` http://localhost:${PORT}`);

@@ -127,6 +127,7 @@ router.post('/', rateLimiter_js_1.publicRegisterLimiter, async (req, res) => {
             ticketType: attendee.ticketType,
             ticketCode: attendee.ticketCode,
             qrDataUrl,
+            imageDataUrl: event.imageDataUrl || null,
         })
             .then(async (emailResult) => {
             if (emailResult.success) {
@@ -601,6 +602,7 @@ router.post('/:id/resend-ticket', authMiddleware_js_1.authMiddleware, async (req
             ticketType: attendee.ticketType,
             ticketCode: attendee.ticketCode,
             qrDataUrl,
+            imageDataUrl: event.imageDataUrl || null,
         });
         attendee.emailLastAttemptAt = new Date();
         if (emailResult.success) {
