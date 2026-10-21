@@ -17,7 +17,7 @@ Built as an industrial training (SIWES) project.
 - **Client:** React + Vite (TypeScript/TSX), Tailwind CSS
 - **Server:** Express + MongoDB/Mongoose (TypeScript)
 - **Auth:** JSON Web Tokens (JWT)
-- **Email:** Nodemailer
+- **Email:** Resend
 - **QR generation:** `qrcode`
 - **QR scanning:** `@zxing/browser`
 
