@@ -29,10 +29,8 @@ export const requireEventOwnership = async (
     }
 
     const organizerIdStr = req.organizer._id ? req.organizer._id.toString() : '';
-    const isSuperAdmin =
-      req.organizer.role === 'superadmin' ||
-      !!req.headers['x-super-admin-token'] ||
-      !!(req.cookies && req.cookies.superAdminToken);
+    // Cross-tenant access needs a DB-backed role; requireSuperAdmin verifies the passcode token.
+    const isSuperAdmin = req.organizer.role === 'superadmin';
 
     const query: any = { _id: rawEventId };
     if (!isSuperAdmin) {
