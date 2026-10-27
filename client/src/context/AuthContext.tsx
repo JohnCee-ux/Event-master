@@ -36,6 +36,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    const navigation = window.performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
+    const isReload = navigation?.type === 'reload';
+
+    if (isReload) {
+      api.logoutOrganizer().catch(() => undefined).finally(() => {
+        sessionStorage.removeItem('gatekeeper_superadmin_token');
+        localStorage.removeItem('gatekeeper_superadmin_token');
+        setOrganizer(null);
+        setIsLoading(false);
+      });
+      return;
+    }
+
     refreshUser();
   }, []);
 

@@ -161,23 +161,23 @@ export const PostEventSummary: React.FC<PostEventSummaryProps> = ({ eventId, onB
             <h3 className="font-bold text-sm text-white border-b border-surface-border pb-2.5">
               Door Operations Timeline
             </h3>
-            <div className="flex justify-between text-xs py-1 border-b border-surface-border/50">
+            <div className="flex flex-col gap-1 py-1 text-xs border-b border-surface-border/50 sm:flex-row sm:justify-between">
               <span className="text-gray-400">First Door Check-In:</span>
               <span className="font-mono text-white font-semibold">
                 {summary.firstCheckInAt ? new Date(summary.firstCheckInAt).toLocaleTimeString() : 'N/A'}
               </span>
             </div>
-            <div className="flex justify-between text-xs py-1 border-b border-surface-border/50">
+            <div className="flex flex-col gap-1 py-1 text-xs border-b border-surface-border/50 sm:flex-row sm:justify-between">
               <span className="text-gray-400">Peak Entry Period:</span>
               <span className="font-mono text-brand-cyan font-semibold">{summary.peakCheckInPeriod || 'N/A'}</span>
             </div>
-            <div className="flex justify-between text-xs py-1 border-b border-surface-border/50">
+            <div className="flex flex-col gap-1 py-1 text-xs border-b border-surface-border/50 sm:flex-row sm:justify-between">
               <span className="text-gray-400">Last Door Check-In:</span>
               <span className="font-mono text-white font-semibold">
                 {summary.lastCheckInAt ? new Date(summary.lastCheckInAt).toLocaleTimeString() : 'N/A'}
               </span>
             </div>
-            <div className="flex justify-between text-xs py-1">
+            <div className="flex flex-col gap-1 py-1 text-xs sm:flex-row sm:justify-between">
               <span className="text-gray-400">Event Ended At:</span>
               <span className="font-mono text-gray-300">
                 {summary.endedAt ? new Date(summary.endedAt).toLocaleTimeString() : 'N/A'}

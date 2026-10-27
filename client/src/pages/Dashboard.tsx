@@ -57,6 +57,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const [attendees, setAttendees] = useState<IAttendee[]>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
+  const [attendeeListError, setAttendeeListError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('ALL');
@@ -84,6 +85,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>([]);
+  const [resendingAttendeeId, setResendingAttendeeId] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const showToast = (msg: string, error = false) => {
@@ -131,6 +133,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
 
+  useEffect(() => {
+    setPage(1);
+    setSelectedAttendeeIds([]);
+  }, [selectedEventId]);
+
   const fetchEventDetails = useCallback(async () => {
     if (!selectedEventId) return;
     try {
@@ -145,12 +152,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (!selectedEventId) return;
     try {
       setLoadingAttendees(true);
+      setAttendeeListError(null);
       const res = await api.listAttendees(selectedEventId, {
         page, limit: 15, search: searchQuery, filter: statusFilter, ticketType: typeFilter,
         sortBy: 'registeredAt', sortOrder: 'desc',
       });
       setAttendees(res.attendees); setTotalPages(res.pagination.totalPages); setTotalAttendees(res.pagination.total);
-    } catch (err) { console.error(err); }
+    } catch (err: any) {
+      console.error(err);
+      setAttendees([]);
+      setTotalPages(1);
+      setTotalAttendees(0);
+      setAttendeeListError(err.message || 'Could not load the guest list.');
+    }
     finally { setLoadingAttendees(false); }
   }, [selectedEventId, page, searchQuery, statusFilter, typeFilter]);
 
@@ -225,11 +239,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const handleResendTicket = async (attendee: IAttendee) => {
+    setResendingAttendeeId(attendee.id);
     try {
       const res = await api.resendTicket(attendee.id);
       showToast(res.message || `Ticket sent to ${attendee.email}`);
       fetchAttendees();
     } catch (err: any) { showToast(`Email failed: ${err.message}`, true); }
+    finally { setResendingAttendeeId(null); }
   };
 
   const handleExportCSV = () => {
@@ -239,7 +255,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const handleCopyLink = () => {
     if (!selectedEventId) return;
-    const url = new URL('/public/register', window.location.origin);
+    const url = new URL('/register', window.location.origin);
     url.searchParams.set('eventId', selectedEventId);
     navigator.clipboard.writeText(url.toString());
     setCopiedLink(true);
@@ -347,9 +363,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {/* Main */}
         <div className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:py-7">
           {/* Mobile top bar */}
-          <div className="mb-5 flex items-center justify-between lg:hidden">
-            <span className="text-lg font-bold tracking-tight">GateKeeper</span>
-            <div className="flex items-center gap-4 text-sm text-stone-600">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 lg:hidden">
+            <span className="min-w-0 text-lg font-bold tracking-tight">GateKeeper</span>
+            <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-sm text-stone-600">
               <button onClick={() => selectedEvent && onEnterLiveMode(selectedEvent.id)}>Scanner</button>
               <button onClick={goToGuests}>Guests</button>
               <button onClick={logout}>Log out</button>
@@ -524,6 +540,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <tbody className="divide-y divide-stone-100">
                         {loadingAttendees ? (
                           <tr><td colSpan={6} className="py-12 text-center text-stone-400">Loading…</td></tr>
+                        ) : attendeeListError ? (
+                          <tr>
+                            <td colSpan={6} className="py-12 text-center">
+                              <p className="font-medium text-red-700">Could not load the guest list.</p>
+                              <p className="mt-1 text-sm text-stone-500">{attendeeListError}</p>
+                              <button onClick={fetchAttendees} className={`${btnSoft} mt-4`}>Try again</button>
+                            </td>
+                          </tr>
                         ) : attendees.length === 0 ? (
                           <tr>
                             <td colSpan={6} className="py-14 text-center">
@@ -571,9 +595,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                     {a.checkedInAt ? 'Undo' : 'Check in'}
                                   </button>
                                   <button onClick={() => setQrModalAttendee(a)} className="rounded-lg p-1.5 text-stone-500 hover:bg-[#f0f3f2] hover:text-stone-900" title="Show QR code" aria-label="Show QR code"><QrCode size={16} /></button>
-                                  {!a.emailSent && (
-                                    <button onClick={() => handleResendTicket(a)} className="rounded-lg p-1.5 text-stone-500 hover:bg-[#f0f3f2] hover:text-stone-900" title="Resend ticket email" aria-label="Resend ticket email"><Mail size={16} /></button>
-                                  )}
+                                  <button
+                                    onClick={() => handleResendTicket(a)}
+                                    disabled={resendingAttendeeId === a.id}
+                                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-stone-500 hover:bg-[#f0f3f2] hover:text-stone-900 disabled:cursor-wait disabled:opacity-50"
+                                    title="Resend QR ticket email"
+                                    aria-label={`Resend QR ticket email to ${a.email}`}
+                                  >
+                                    <Mail size={15} /> <span>Resend</span>
+                                  </button>
                                 </div>
                               </td>
                             </tr>

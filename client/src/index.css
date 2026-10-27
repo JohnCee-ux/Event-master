@@ -1769,6 +1769,9 @@ body[data-theme='light'] {
 .public-register-shell {
   justify-content: center !important;
   min-height: 100dvh;
+  height: auto;
+  max-height: none;
+  overflow-x: clip;
   overflow-y: visible;
   padding-top: 1rem;
   padding-bottom: 1rem;

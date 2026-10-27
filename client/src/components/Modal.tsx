@@ -50,7 +50,7 @@ export const Modal: React.FC<ModalProps> = ({
       aria-modal="true"
     >
       <div
-        className={`relative w-full ${maxWidthClasses} glass-card border border-brand-purple/20 rounded-2xl shadow-2xl shadow-brand-purple/10 overflow-hidden animate-scale-up`}
+        className={`relative max-h-[calc(100dvh-2rem)] w-full ${maxWidthClasses} overflow-y-auto glass-card border border-brand-purple/20 rounded-2xl shadow-2xl shadow-brand-purple/10 animate-scale-up`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -78,7 +78,7 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-8 bg-gradient-to-b from-white/[0.02] to-transparent">{children}</div>
+        <div className="p-5 sm:p-8 bg-gradient-to-b from-white/[0.02] to-transparent">{children}</div>
       </div>
     </div>
   );

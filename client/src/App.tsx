@@ -50,7 +50,7 @@ const LoginRoute: React.FC = () => {
     <Login
       onNavigateToRegister={() => navigate('/register')}
       onNavigateToLogin={() => navigate('/login')}
-      onNavigateToPublicRegister={() => navigate('/public/register')}
+      onNavigateToPublicRegister={() => navigate('/attendees')}
       openAuthOnLoad
       onCancelAuth={() => navigate('/')}
     />
@@ -63,7 +63,7 @@ const LandingRoute: React.FC = () => {
     <Login
       onNavigateToRegister={() => navigate('/register')}
       onNavigateToLogin={() => navigate('/login')}
-      onNavigateToPublicRegister={() => navigate('/public/register')}
+      onNavigateToPublicRegister={() => navigate('/attendees')}
     />
   );
 };
@@ -73,7 +73,7 @@ const RegisterRoute: React.FC = () => {
   return (
     <RegisterOrganizer
       onNavigateToLogin={() => navigate('/login')}
-      onNavigateToPublicRegister={() => navigate('/public/register')}
+      onNavigateToPublicRegister={() => navigate('/attendees')}
     />
   );
 };
@@ -85,7 +85,7 @@ const DashboardRoute: React.FC = () => {
       onEnterLiveMode={(id) => navigate(`/events/${id}/live`)}
       onViewSummary={(id) => navigate(`/events/${id}/summary`)}
       onViewAuditLog={(id) => navigate(`/events/${id}/audit`)}
-      onOpenPublicRegister={(id) => navigate(`/public/register?eventId=${id}`)}
+      onOpenPublicRegister={(id) => navigate(`/register?eventId=${id}`)}
       onNavigateToSuperAdmin={() => navigate('/super-admin')}
     />
   );
@@ -127,7 +127,6 @@ const AuditRoute: React.FC = () => {
 
 const PublicRegisterRoute: React.FC = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
 
   // Read optional ?eventId= from the query string
   const params = new URLSearchParams(window.location.search);
@@ -136,9 +135,20 @@ const PublicRegisterRoute: React.FC = () => {
   return (
     <PublicRegister
       eventId={eventId}
-      onSelectEvent={(id) => navigate(`/public/register?eventId=${id}`)}
-      onBackToDashboard={isAuthenticated ? () => navigate('/dashboard') : undefined}
+      onSelectEvent={(id) => navigate(`/register?eventId=${id}`)}
     />
+  );
+};
+
+const RegisterPathRoute: React.FC = () => {
+  const params = new URLSearchParams(window.location.search);
+  const hasEventId = Boolean(params.get('eventId') || params.get('event'));
+
+  if (hasEventId) return <PublicRegisterRoute />;
+  return (
+    <PublicRoute>
+      <RegisterRoute />
+    </PublicRoute>
   );
 };
 
@@ -168,9 +178,6 @@ const AppRoutes: React.FC = () => (
           }
         />
 
-        {/* Public attendee route — accessible without login */}
-        <Route path="/public/register" element={<PublicRegisterRoute />} />
-
         {/* Auth routes — redirect to dashboard if already logged in */}
         <Route
           path="/login"
@@ -180,13 +187,10 @@ const AppRoutes: React.FC = () => (
             </PublicRoute>
           }
         />
+        <Route path="/attendees" element={<PublicRegisterRoute />} />
         <Route
           path="/register"
-          element={
-            <PublicRoute>
-              <RegisterRoute />
-            </PublicRoute>
-          }
+          element={<RegisterPathRoute />}
         />
 
         {/* Protected organizer routes */}

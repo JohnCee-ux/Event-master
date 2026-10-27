@@ -34,16 +34,19 @@ const getSmtpTransporter = (): Transporter => {
     throw new Error('SMTP_PORT must be a valid TCP port.');
   }
 
-  transporter = nodemailer.createTransport({
+  const transportOptions = {
     host: smtpHost,
     port: smtpPort,
     secure: smtpSecure,
+    family: 4,
     requireTLS: !smtpSecure,
     connectionTimeout: 15_000,
     greetingTimeout: 30_000,
     socketTimeout: 60_000,
     auth: { user: emailUser, pass: emailPass },
-  });
+  } as Parameters<typeof nodemailer.createTransport>[0];
+
+  transporter = nodemailer.createTransport(transportOptions);
   return transporter;
 };
 

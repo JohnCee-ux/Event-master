@@ -553,13 +553,13 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
                     <div className="relative overflow-hidden rounded-2xl bg-[#1f8f8a] p-5 text-white">
                       <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/10" />
                       <div className="pointer-events-none absolute -bottom-10 right-16 h-24 w-24 rounded-full bg-white/10" />
-                      <div className="relative flex items-center gap-4">
+                      <div className="relative flex min-w-0 items-start gap-4">
                         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
                           <Database size={20} />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <h2 className="font-semibold">Storage: {m.storageEngine}</h2>
-                          <p className="text-sm text-white/80">All data is saved to this store, with an in-memory copy for speed.</p>
+                          <p className="break-words text-sm text-white/80">All data is saved to this store, with an in-memory copy for speed.</p>
                         </div>
                       </div>
                     </div>

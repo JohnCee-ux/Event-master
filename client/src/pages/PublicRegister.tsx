@@ -12,20 +12,17 @@ import {
   SearchIcon,
   QrCodeIcon,
   ArrowRightIcon,
-  ArrowLeftIcon,
 } from '../components/icons/CustomIcons.js';
 import { BrandLogo } from '../components/BrandLogo.js';
 
 interface PublicRegisterProps {
   eventId?: string;
   onSelectEvent?: (eventId: string) => void;
-  onBackToDashboard?: () => void;
 }
 
 export const PublicRegister: React.FC<PublicRegisterProps> = ({
   eventId: initialEventId = '',
   onSelectEvent,
-  onBackToDashboard,
 }) => {
   const [activeTab, setActiveTab] = useState<'register' | 'lookup'>('register');
   const [selectedEventId, setSelectedEventId] = useState<string>(initialEventId);
@@ -207,7 +204,7 @@ export const PublicRegister: React.FC<PublicRegisterProps> = ({
   );
 
   return (
-    <div className="page-shell public-register-shell min-h-screen text-slate-200 font-sans py-4 sm:py-5 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-start relative overflow-x-hidden selection:bg-brand-purple/30 selection:text-white">
+    <div className="page-shell public-register-shell min-h-screen text-slate-200 font-sans py-4 sm:py-5 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-start relative selection:bg-brand-purple/30 selection:text-white">
       {/* Background glow accents */}
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-brand-purple/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-brand-coral/10 rounded-full blur-[100px] pointer-events-none" />
@@ -222,11 +219,6 @@ export const PublicRegister: React.FC<PublicRegisterProps> = ({
           </div>
         </div>
 
-        {onBackToDashboard && (
-          <button onClick={onBackToDashboard} className="public-register-secondary-action px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-xs font-semibold text-slate-300 transition-colors flex items-center gap-1.5">
-            <ArrowLeftIcon size={13} /> Back to Dashboard
-          </button>
-        )}
       </div>
 
       {/* Main Container Subtitle (shown during selection/registration) */}
@@ -277,21 +269,21 @@ export const PublicRegister: React.FC<PublicRegisterProps> = ({
 
               {/* Details */}
               <div className="w-full max-w-sm space-y-2 text-xs sm:text-sm pt-2.5 sm:pt-3 border-t border-white/10">
-                <div className="flex justify-between border-b border-white/5 pb-1.5">
+                <div className="flex flex-col gap-1 border-b border-white/5 pb-1.5 sm:flex-row sm:justify-between">
                   <span className="text-slate-500">Event</span>
-                  <span className="font-bold text-white text-right max-w-[180px] truncate">{ticketResult.event.name}</span>
+                  <span className="max-w-full break-words font-bold text-white sm:max-w-[180px] sm:text-right">{ticketResult.event.name}</span>
                 </div>
-                <div className="flex justify-between border-b border-white/5 pb-1.5">
+                <div className="flex flex-col gap-1 border-b border-white/5 pb-1.5 sm:flex-row sm:justify-between">
                   <span className="text-slate-500">Attendee</span>
-                  <span className="font-bold text-white">{ticketResult.attendee.name}</span>
+                  <span className="break-words font-bold text-white sm:text-right">{ticketResult.attendee.name}</span>
                 </div>
-                <div className="flex justify-between border-b border-white/5 pb-1.5">
+                <div className="flex flex-col gap-1 border-b border-white/5 pb-1.5 sm:flex-row sm:justify-between">
                   <span className="text-slate-500">Venue</span>
-                  <span className="text-slate-300">{ticketResult.event.venue}</span>
+                  <span className="break-words text-slate-300 sm:text-right">{ticketResult.event.venue}</span>
                 </div>
-                <div className="flex justify-between pb-1">
+                <div className="flex flex-col gap-1 pb-1 sm:flex-row sm:justify-between">
                   <span className="text-slate-500">Time</span>
-                  <span className="text-slate-300">{ticketResult.event.date} at {ticketResult.event.startTime}</span>
+                  <span className="break-words text-slate-300 sm:text-right">{ticketResult.event.date} at {ticketResult.event.startTime}</span>
                 </div>
               </div>
             </div>

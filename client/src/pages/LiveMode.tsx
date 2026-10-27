@@ -481,7 +481,7 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
       <main className="mx-auto grid w-full max-w-7xl flex-1 grid-cols-1 gap-5 p-4 sm:p-6 lg:grid-cols-12">
         {/* Scanner column */}
         <div className="flex flex-col gap-4 lg:col-span-7">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="rounded-2xl bg-[#b0e9c9] p-4">
               <p className="text-xs font-medium text-stone-700">Checked in</p>
               <p className="mt-1 text-3xl font-bold tabular-nums">{stats.checkedInCount}</p>
@@ -501,7 +501,7 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
           </div>
 
           {/* Camera */}
-          <div className="relative flex min-h-[360px] items-center justify-center overflow-hidden rounded-3xl bg-stone-900 sm:min-h-[440px]">
+            <div className="relative flex min-h-[300px] items-center justify-center overflow-hidden rounded-3xl bg-stone-900 sm:min-h-[440px]">
             <video
               ref={videoRef}
               className={`h-full w-full rounded-3xl object-cover ${!isScanning ? 'hidden' : ''}`}
@@ -573,7 +573,7 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
                 <div className="text-2xl font-bold tracking-tight">{rs.label}</div>
 
                 {currentResult.attendeeName && (
-                  <div className="mt-2 text-2xl font-bold sm:text-3xl">{currentResult.attendeeName}</div>
+                  <div className="mt-2 max-w-full break-words text-2xl font-bold sm:text-3xl">{currentResult.attendeeName}</div>
                 )}
                 {currentResult.ticketType && (
                   <div className="mt-2 rounded-full bg-white/70 px-3 py-1 text-sm font-medium">{currentResult.ticketType} pass</div>
@@ -594,13 +594,13 @@ export const LiveMode: React.FC<LiveModeProps> = ({ eventId, onExit, onEventEnde
 
           {/* Manual entry */}
           <div className={panel}>
-            <form onSubmit={handleManualSubmit} className="flex gap-2">
+            <form onSubmit={handleManualSubmit} className="flex flex-col gap-2 sm:flex-row">
               <input
                 type="text"
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value.toUpperCase())}
                 placeholder="Or type a ticket code, e.g. EVT-7K9M-4X2B"
-                className={`${field} font-mono uppercase tracking-wide`}
+                className={`${field} min-w-0 font-mono uppercase tracking-wide`}
                 disabled={manualSubmitting}
                 aria-label="Ticket code"
               />

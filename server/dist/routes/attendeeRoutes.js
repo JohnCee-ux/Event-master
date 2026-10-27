@@ -113,8 +113,7 @@ router.post('/', rateLimiter_js_1.publicRegisterLimiter, async (req, res) => {
         });
         // Generate QR Data URL
         const qrDataUrl = await (0, qrService_js_1.generateQRCodeDataUrl)(qrToken);
-        // Send ticket email asynchronously without blocking registration
-        (0, emailService_js_1.sendTicketEmail)({
+        const emailResult = await (0, emailService_js_1.sendTicketEmail)({
             toEmail: attendee.email,
             attendeeName: attendee.name,
             eventName: event.name,
@@ -125,24 +124,18 @@ router.post('/', rateLimiter_js_1.publicRegisterLimiter, async (req, res) => {
             ticketCode: attendee.ticketCode,
             qrDataUrl,
             imageDataUrl: event.imageDataUrl || null,
-        })
-            .then(async (emailResult) => {
-            if (emailResult.success) {
-                attendee.emailSent = true;
-                attendee.emailLastAttemptAt = new Date();
-                await attendee.save();
-            }
-            else {
-                attendee.emailLastAttemptAt = new Date();
-                await attendee.save();
-            }
-        })
-            .catch((err) => {
-            console.error('Async email error:', err);
         });
+        attendee.emailSent = emailResult.success;
+        attendee.emailLastAttemptAt = new Date();
+        await attendee.save();
+        if (!emailResult.success) {
+            console.error(`[Ticket Email Failed] Attendee ${attendee._id.toString()}: ${emailResult.error}`);
+        }
         res.status(201).json({
             success: true,
-            message: 'Registration successful! Please save your ticket.',
+            message: emailResult.success
+                ? 'Registration successful! Your ticket has been emailed.'
+                : 'Registration successful, but we could not send the ticket email. Please save this QR code and ticket code.',
             attendee: {
                 id: attendee._id.toString(),
                 name: attendee.name,
@@ -152,7 +145,7 @@ router.post('/', rateLimiter_js_1.publicRegisterLimiter, async (req, res) => {
                 qrToken: attendee.qrToken,
                 qrDataUrl,
                 registeredAt: attendee.registeredAt.toISOString(),
-                emailSent: false,
+                emailSent: emailResult.success,
             },
             event: {
                 id: event._id.toString(),

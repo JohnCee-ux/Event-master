@@ -33,12 +33,24 @@ const matches = (row: Row, query: Row): boolean => {
 export class SupabaseQuery<T> implements PromiseLike<T> {
   private sortKey: string | null = null;
   private sortDirection: 1 | -1 = 1;
+  private skipCount = 0;
+  private limitCount: number | null = null;
 
   constructor(private readonly resolver: () => Promise<T>) {}
 
   sort(options: Record<string, 1 | -1>) {
     this.sortKey = Object.keys(options)[0] || null;
     this.sortDirection = this.sortKey ? options[this.sortKey] : 1;
+    return this;
+  }
+
+  skip(count: number) {
+    this.skipCount = Math.max(0, count);
+    return this;
+  }
+
+  limit(count: number) {
+    this.limitCount = Math.max(0, count);
     return this;
   }
 
@@ -53,12 +65,15 @@ export class SupabaseQuery<T> implements PromiseLike<T> {
 
   private async resolve(): Promise<T> {
     const value: any = await this.resolver();
-    if (!this.sortKey || !Array.isArray(value)) return value;
-    return [...value].sort((a, b) => {
-      if (a[this.sortKey!] < b[this.sortKey!]) return -1 * this.sortDirection;
-      if (a[this.sortKey!] > b[this.sortKey!]) return 1 * this.sortDirection;
-      return 0;
-    }) as T;
+    if (!Array.isArray(value)) return value;
+    const sorted = this.sortKey
+      ? [...value].sort((a, b) => {
+          if (a[this.sortKey!] < b[this.sortKey!]) return -1 * this.sortDirection;
+          if (a[this.sortKey!] > b[this.sortKey!]) return 1 * this.sortDirection;
+          return 0;
+        })
+      : value;
+    return sorted.slice(this.skipCount, this.limitCount === null ? undefined : this.skipCount + this.limitCount) as T;
   }
 }
 

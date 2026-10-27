@@ -33,16 +33,18 @@ const getSmtpTransporter = () => {
     if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
         throw new Error('SMTP_PORT must be a valid TCP port.');
     }
-    transporter = nodemailer_1.default.createTransport({
+    const transportOptions = {
         host: smtpHost,
         port: smtpPort,
         secure: smtpSecure,
+        family: 4,
         requireTLS: !smtpSecure,
         connectionTimeout: 15_000,
         greetingTimeout: 30_000,
         socketTimeout: 60_000,
         auth: { user: emailUser, pass: emailPass },
-    });
+    };
+    transporter = nodemailer_1.default.createTransport(transportOptions);
     return transporter;
 };
 const sendTicketEmail = async (params) => {

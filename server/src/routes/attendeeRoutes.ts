@@ -130,8 +130,7 @@ router.post('/', publicRegisterLimiter, async (req: Request, res: Response): Pro
     // Generate QR Data URL
     const qrDataUrl = await generateQRCodeDataUrl(qrToken);
 
-    // Send ticket email asynchronously without blocking registration
-    sendTicketEmail({
+    const emailResult = await sendTicketEmail({
       toEmail: attendee.email,
       attendeeName: attendee.name,
       eventName: event.name,
@@ -142,24 +141,21 @@ router.post('/', publicRegisterLimiter, async (req: Request, res: Response): Pro
       ticketCode: attendee.ticketCode,
       qrDataUrl,
       imageDataUrl: event.imageDataUrl || null,
-    })
-      .then(async (emailResult) => {
-        if (emailResult.success) {
-          attendee.emailSent = true;
-          attendee.emailLastAttemptAt = new Date();
-          await attendee.save();
-        } else {
-          attendee.emailLastAttemptAt = new Date();
-          await attendee.save();
-        }
-      })
-      .catch((err) => {
-        console.error('Async email error:', err);
-      });
+    });
+
+    attendee.emailSent = emailResult.success;
+    attendee.emailLastAttemptAt = new Date();
+    await attendee.save();
+
+    if (!emailResult.success) {
+      console.error(`[Ticket Email Failed] Attendee ${attendee._id.toString()}: ${emailResult.error}`);
+    }
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful! Please save your ticket.',
+      message: emailResult.success
+        ? 'Registration successful! Your ticket has been emailed.'
+        : 'Registration successful, but we could not send the ticket email. Please save this QR code and ticket code.',
       attendee: {
         id: attendee._id.toString(),
         name: attendee.name,
@@ -169,7 +165,7 @@ router.post('/', publicRegisterLimiter, async (req: Request, res: Response): Pro
         qrToken: attendee.qrToken,
         qrDataUrl,
         registeredAt: attendee.registeredAt.toISOString(),
-        emailSent: false,
+        emailSent: emailResult.success,
       },
       event: {
         id: event._id.toString(),
