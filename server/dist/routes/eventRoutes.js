@@ -26,32 +26,26 @@ const createEventSchema = zod_1.z.object({
     prefix: zod_1.z.string().min(2).max(8).optional().default('EVT'),
 });
 const updateEventSchema = createEventSchema.partial();
+const getAttendeeCounts = async (eventIds) => {
+    const attendees = await Attendee_js_1.Attendee.find({ eventId: { $in: eventIds } }).exec();
+    const countMap = new Map();
+    attendees.forEach((attendee) => {
+        const eventId = attendee.eventId.toString();
+        const current = countMap.get(eventId) || { registeredCount: 0, checkedInCount: 0 };
+        current.registeredCount += 1;
+        if (attendee.checkedInAt)
+            current.checkedInCount += 1;
+        countMap.set(eventId, current);
+    });
+    return countMap;
+};
 // List organizer's events with real-time registered and checkedIn counts
 router.get('/', authMiddleware_js_1.authMiddleware, async (req, res) => {
     try {
         const organizerId = req.organizer._id.toString();
         const events = await Event_js_1.Event.find({ organizerId }).sort({ createdAt: -1 }).lean();
         const eventIds = events.map((e) => e._id);
-        // Aggregate registered and checkedIn counts
-        const counts = await Attendee_js_1.Attendee.aggregate([
-            { $match: { eventId: { $in: eventIds } } },
-            {
-                $group: {
-                    _id: '$eventId',
-                    registeredCount: { $sum: 1 },
-                    checkedInCount: {
-                        $sum: { $cond: [{ $ifNull: ['$checkedInAt', false] }, 1, 0] },
-                    },
-                },
-            },
-        ]);
-        const countMap = new Map();
-        counts.forEach((c) => {
-            countMap.set(c._id.toString(), {
-                registeredCount: c.registeredCount,
-                checkedInCount: c.checkedInCount,
-            });
-        });
+        const countMap = await getAttendeeCounts(eventIds);
         const enriched = events.map((evt) => {
             const c = countMap.get(evt._id.toString()) || { registeredCount: 0, checkedInCount: 0 };
             return {
@@ -131,21 +125,13 @@ router.post('/', authMiddleware_js_1.authMiddleware, async (req, res) => {
 router.get('/public', async (_req, res) => {
     try {
         const events = await Event_js_1.Event.find({
-            status: { $in: ['UPCOMING', 'LIVE'] },
+            status: { $in: ['UPCOMING', 'LIVE', 'upcoming', 'live'] },
         })
             .sort({ createdAt: -1 })
             .lean();
-        const eventIds = events.map((e) => e._id);
-        const counts = await Attendee_js_1.Attendee.aggregate([
-            { $match: { eventId: { $in: eventIds } } },
-            { $group: { _id: '$eventId', registeredCount: { $sum: 1 } } },
-        ]);
-        const countMap = new Map();
-        counts.forEach((c) => {
-            countMap.set(c._id.toString(), c.registeredCount);
-        });
+        const countMap = await getAttendeeCounts(events.map((e) => e._id));
         const publicEvents = events.map((evt) => {
-            const reg = countMap.get(evt._id.toString()) || 0;
+            const reg = countMap.get(evt._id.toString())?.registeredCount || 0;
             return {
                 id: evt._id.toString(),
                 name: evt.name,

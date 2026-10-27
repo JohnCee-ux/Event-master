@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import QRCode from 'qrcode';
 import {
-  Activity, ArrowUpRight, CalendarDays, Check, CheckCircle2, ChevronDown, Clipboard,
-  Command, Copy, Download, FileUp, Filter, LayoutDashboard, LogOut,
-  Mail, Menu, MoreHorizontal, Plus, QrCode, Radio, RefreshCw, Search, Send,
-  Shield, ShieldCheck, Ticket, Trash2, UsersRound, Zap,
+  ChevronRight, ClipboardList, Copy, Download, LayoutDashboard, LogOut, Mail,
+  Plus, QrCode, Search, ShieldCheck, Trash2, Users,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
 import { api } from '../api/apiClient.js';
 import { IEvent, IAttendee, IEventAnalytics } from '../../../shared/types.js';
+import { BrandLogo } from '../components/BrandLogo.js';
 
 interface DashboardProps {
   onEnterLiveMode: (eventId: string) => void;
@@ -18,16 +17,35 @@ interface DashboardProps {
   onNavigateToSuperAdmin?: () => void;
 }
 
-const StatusPill: React.FC<{ status: string }> = ({ status }) => {
-  const base = "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border";
-  if (status === 'LIVE') return <span className={`${base} bg-brand-purple/20 text-brand-purple-hi border-brand-purple/40`}><span className="w-1.5 h-1.5 rounded-full bg-brand-purple-hi animate-pulse" /> LIVE</span>;
-  if (status === 'UPCOMING') return <span className={`${base} bg-blue-500/20 text-blue-300 border-blue-500/40`}>UPCOMING</span>;
-  if (status === 'ENDED') return <span className={`${base} bg-white/10 text-slate-300 border-white/20`}>ENDED</span>;
-  return <span className={`${base} bg-amber-500/20 text-amber-300 border-amber-500/40`}>DRAFT</span>;
+/*
+  Standard Tailwind + a few arbitrary colours, so no config or custom CSS needed.
+  Palette: tinted page, white panels, pastel stat cards, one lime accent, one teal feature card.
+*/
+const BRAND_ACCENT = 'brand-gradient text-white hover:brightness-110';
+const field =
+  'w-full rounded-xl border border-stone-200 bg-[#f4f7f6] px-3.5 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:bg-white focus:outline-none';
+const btnBrand = `inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${BRAND_ACCENT}`;
+const btnDark =
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-stone-700 disabled:opacity-50';
+const btnSoft =
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-[#f0f3f2] px-4 py-2.5 text-sm font-medium text-stone-700 transition hover:bg-[#e6ebe9] disabled:opacity-50';
+const panel = 'rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(20,30,25,0.04)]';
+
+const statusMeta: Record<string, { label: string; dot: string }> = {
+  LIVE: { label: 'Live now', dot: 'bg-emerald-500' },
+  UPCOMING: { label: 'Upcoming', dot: 'bg-sky-500' },
+  ENDED: { label: 'Ended', dot: 'bg-stone-400' },
+  DRAFT: { label: 'Draft', dot: 'bg-amber-500' },
+};
+
+const initialsOf = (name?: string) => {
+  if (!name) return 'GK';
+  const p = name.trim().split(' ');
+  return (p.length >= 2 ? `${p[0][0]}${p[1][0]}` : name.slice(0, 2)).toUpperCase();
 };
 
 export const Dashboard: React.FC<DashboardProps> = ({
-  onEnterLiveMode, onViewSummary, onViewAuditLog, onOpenPublicRegister, onNavigateToSuperAdmin,
+  onEnterLiveMode, onViewAuditLog, onNavigateToSuperAdmin,
 }) => {
   const { organizer, logout } = useAuth();
 
@@ -35,17 +53,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [selectedEvent, setSelectedEvent] = useState<IEvent | null>(null);
   const [loadingEvents, setLoadingEvents] = useState(true);
-
   const [analytics, setAnalytics] = useState<IEventAnalytics | null>(null);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   const [attendees, setAttendees] = useState<IAttendee[]>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('ALL');
-  const [sortBy] = useState('registeredAt');
-  const [sortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalAttendees, setTotalAttendees] = useState(0);
@@ -63,59 +77,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [qrModalAttendee, setQrModalAttendee] = useState<IAttendee | null>(null);
   const [qrModalUrl, setQrModalUrl] = useState<string | null>(null);
 
-  const [showEventDropdown, setShowEventDropdown] = useState(false);
-  const [showActionMenu, setShowActionMenu] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletingEvent, setDeletingEvent] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [copiedLink, setCopiedLink] = useState(false);
 
-  const [simulationActive, setSimulationActive] = useState<boolean>(true);
-  const [liveVelocityBonus, setLiveVelocityBonus] = useState<number>(60);
-  const [workflowRunning, setWorkflowRunning] = useState<boolean>(false);
+  const [toast, setToast] = useState<{ msg: string; error?: boolean } | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>([]);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+  const showToast = (msg: string, error = false) => {
+    setToast({ msg, error });
+    setTimeout(() => setToast(null), 4000);
   };
 
   useEffect(() => {
-    if (!simulationActive) return;
-    const interval = setInterval(() => {
-      setLiveVelocityBonus((prev) => Math.min(92, Math.max(48, prev + (Math.floor(Math.random() * 5) - 2))));
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [simulationActive]);
-
-  useEffect(() => {
-    const handleShortcut = (event: KeyboardEvent) => {
-      if (event.key === '/' && document.activeElement?.tagName !== 'INPUT') {
+    const onKey = (event: KeyboardEvent) => {
+      const tag = document.activeElement?.tagName;
+      if (event.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA') {
         event.preventDefault();
         searchInputRef.current?.focus();
       }
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        setShowCommandPalette(true);
-      }
       if (event.key === 'Escape') {
-        setShowCommandPalette(false);
-        setMobileNavOpen(false);
+        setShowCreateModal(false);
+        setQrModalAttendee(null);
       }
     };
-    window.addEventListener('keydown', handleShortcut);
-    return () => window.removeEventListener('keydown', handleShortcut);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   useEffect(() => {
     if (qrModalAttendee) {
       QRCode.toDataURL(qrModalAttendee.qrToken || qrModalAttendee.ticketCode, {
-        width: 320, margin: 2,
-        color: { dark: '#080B14', light: '#FFFFFF' },
+        width: 320, margin: 2, color: { dark: '#1c1917', light: '#FFFFFF' },
       }).then(setQrModalUrl).catch(() => setQrModalUrl(null));
     } else {
       setQrModalUrl(null);
@@ -139,11 +134,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const fetchEventDetails = useCallback(async () => {
     if (!selectedEventId) return;
     try {
-      setLoadingAnalytics(true);
       const [evtRes, anaRes] = await Promise.all([api.getEvent(selectedEventId), api.getEventAnalytics(selectedEventId)]);
       setSelectedEvent(evtRes.event); setAnalytics(anaRes.analytics);
     } catch (err) { console.error(err); }
-    finally { setLoadingAnalytics(false); }
   }, [selectedEventId]);
 
   useEffect(() => { fetchEventDetails(); }, [fetchEventDetails]);
@@ -153,12 +146,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
     try {
       setLoadingAttendees(true);
       const res = await api.listAttendees(selectedEventId, {
-        page, limit: 15, search: searchQuery, filter: statusFilter, ticketType: typeFilter, sortBy, sortOrder,
+        page, limit: 15, search: searchQuery, filter: statusFilter, ticketType: typeFilter,
+        sortBy: 'registeredAt', sortOrder: 'desc',
       });
       setAttendees(res.attendees); setTotalPages(res.pagination.totalPages); setTotalAttendees(res.pagination.total);
     } catch (err) { console.error(err); }
     finally { setLoadingAttendees(false); }
-  }, [selectedEventId, page, searchQuery, statusFilter, typeFilter, sortBy, sortOrder]);
+  }, [selectedEventId, page, searchQuery, statusFilter, typeFilter]);
 
   useEffect(() => { fetchAttendees(); }, [fetchAttendees]);
 
@@ -166,9 +160,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (!selectedEventId) return;
     try {
       await api.publishEvent(selectedEventId);
-      showToast('Event published — registration is active.');
+      showToast('Published. People can register now.');
       fetchEvents(); fetchEventDetails();
-    } catch (err: any) { alert(`Publish failed: ${err.message}`); }
+    } catch (err: any) { showToast(`Couldn't publish: ${err.message}`, true); }
   };
 
   const handleStartEvent = async () => {
@@ -176,7 +170,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     try {
       await api.startEvent(selectedEventId);
       onEnterLiveMode(selectedEventId);
-    } catch (err: any) { alert(`Failed to start event: ${err.message}`); }
+    } catch (err: any) { showToast(`Couldn't start the event: ${err.message}`, true); }
   };
 
   const handleCreateEvent = async (e: React.FormEvent) => {
@@ -185,10 +179,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     try {
       const res = await api.createEvent({ ...createForm, capacity: Number(createForm.capacity) });
       setShowCreateModal(false);
-      showToast(`"${res.event.name}" created as DRAFT.`);
+      showToast(`"${res.event.name}" saved as a draft.`);
       setSelectedEventId(res.event.id);
       await fetchEvents();
-    } catch (err: any) { setCreateError(err.message || 'Failed to create event.'); }
+    } catch (err: any) { setCreateError(err.message || 'Could not create the event.'); }
     finally { setCreatingEvent(false); }
   };
 
@@ -196,12 +190,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setCreateError('Please choose an image file (PNG, JPG, WEBP, or GIF).');
+      setCreateError('Please choose an image file (PNG, JPG, WEBP or GIF).');
       e.target.value = '';
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      setCreateError('Event graphics must be 2 MB or smaller.');
+      setCreateError('The image must be 2 MB or smaller.');
       e.target.value = '';
       return;
     }
@@ -209,11 +203,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     reader.onload = () => {
       const result = reader.result;
       if (typeof result === 'string') {
-        setCreateForm((current) => ({ ...current, imageDataUrl: result }));
+        setCreateForm((c) => ({ ...c, imageDataUrl: result }));
         setCreateError(null);
       }
     };
-    reader.onerror = () => setCreateError('The event graphic could not be read. Please try again.');
+    reader.onerror = () => setCreateError('Could not read that image. Try again.');
     reader.readAsDataURL(file);
   };
 
@@ -221,21 +215,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
     try {
       if (attendee.checkedInAt) {
         await api.undoCheckIn(attendee.id, 'Organizer dashboard undo');
-        showToast(`Check-in reversed for ${attendee.name}.`);
+        showToast(`Check-in undone for ${attendee.name}.`);
       } else {
         await api.checkInById(attendee.id);
-        showToast(`${attendee.name} admitted.`);
+        showToast(`${attendee.name} checked in.`);
       }
       fetchAttendees(); fetchEventDetails();
-    } catch (err: any) { alert(`Action failed: ${err.message}`); }
+    } catch (err: any) { showToast(err.message || 'Something went wrong.', true); }
   };
 
   const handleResendTicket = async (attendee: IAttendee) => {
     try {
       const res = await api.resendTicket(attendee.id);
-      showToast(res.message || `Ticket dispatched to ${attendee.email}`);
+      showToast(res.message || `Ticket sent to ${attendee.email}`);
       fetchAttendees();
-    } catch (err: any) { alert(`Email error: ${err.message}`); }
+    } catch (err: any) { showToast(`Email failed: ${err.message}`, true); }
   };
 
   const handleExportCSV = () => {
@@ -243,43 +237,30 @@ export const Dashboard: React.FC<DashboardProps> = ({
     window.open(`/api/events/${selectedEventId}/export/attendees.csv`, '_blank');
   };
 
-  const handleImportCsv = () => showToast('CSV import is ready for your attendee list.');
-
   const handleCopyLink = () => {
     if (!selectedEventId) return;
-    const registrationUrl = new URL('/register', window.location.origin);
-    registrationUrl.searchParams.set('eventId', selectedEventId);
-    navigator.clipboard.writeText(registrationUrl.toString());
+    const url = new URL('/public/register', window.location.origin);
+    url.searchParams.set('eventId', selectedEventId);
+    navigator.clipboard.writeText(url.toString());
     setCopiedLink(true);
-    showToast('Registration link copied.');
-    setTimeout(() => setCopiedLink(false), 3000);
+    setTimeout(() => setCopiedLink(false), 2500);
   };
 
-  const triggerWorkflowRun = () => {
-    setWorkflowRunning(true);
-    setTimeout(() => {
-      setWorkflowRunning(false);
-      showToast('Automated workflow run finished successfully.');
-    }, 1800);
-  };
+  const toggleAttendeeSelection = (id: string) =>
+    setSelectedAttendeeIds((cur) => cur.includes(id) ? cur.filter((i) => i !== id) : [...cur, id]);
 
-  const toggleAttendeeSelection = (id: string) => {
-    setSelectedAttendeeIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
-  };
-
-  const toggleAllAttendees = () => {
-    setSelectedAttendeeIds((current) => current.length === attendees.length ? [] : attendees.map((attendee) => attendee.id));
-  };
+  const toggleAllAttendees = () =>
+    setSelectedAttendeeIds((cur) => cur.length === attendees.length ? [] : attendees.map((a) => a.id));
 
   const handleBulkAdmit = async () => {
-    const pendingAttendees = attendees.filter((attendee) => selectedAttendeeIds.includes(attendee.id) && !attendee.checkedInAt);
-    if (!pendingAttendees.length) return;
+    const pending = attendees.filter((a) => selectedAttendeeIds.includes(a.id) && !a.checkedInAt);
+    if (!pending.length) return;
     try {
-      await Promise.all(pendingAttendees.map((attendee) => api.checkInById(attendee.id)));
+      await Promise.all(pending.map((a) => api.checkInById(a.id)));
       setSelectedAttendeeIds([]);
-      showToast(`${pendingAttendees.length} attendees admitted.`);
+      showToast(`${pending.length} checked in.`);
       fetchAttendees(); fetchEventDetails();
-    } catch (err: any) { alert(`Bulk action failed: ${err.message}`); }
+    } catch (err: any) { showToast(err.message || 'Bulk check-in failed.', true); }
   };
 
   const handleDeleteEvent = async () => {
@@ -287,16 +268,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setDeletingEvent(true);
     setDeleteError(null);
     try {
-      const eventName = selectedEvent.name;
-      const eventIdToDelete = selectedEvent.id;
-      await api.deleteEvent(eventIdToDelete);
+      const name = selectedEvent.name;
+      const id = selectedEvent.id;
+      await api.deleteEvent(id);
       setShowDeleteModal(false);
-      showToast(`Event "${eventName}" deleted successfully.`);
-
-      const remainingEvents = events.filter((e) => e.id !== eventIdToDelete);
-      setEvents(remainingEvents);
-      if (remainingEvents.length > 0) {
-        setSelectedEventId(remainingEvents[0].id);
+      showToast(`"${name}" deleted.`);
+      const remaining = events.filter((e) => e.id !== id);
+      setEvents(remaining);
+      if (remaining.length > 0) {
+        setSelectedEventId(remaining[0].id);
       } else {
         setSelectedEventId('');
         setSelectedEvent(null);
@@ -304,327 +284,484 @@ export const Dashboard: React.FC<DashboardProps> = ({
         setAnalytics(null);
       }
     } catch (err: any) {
-      setDeleteError(err.message || 'Failed to delete event.');
+      setDeleteError(err.message || 'Could not delete the event.');
     } finally {
       setDeletingEvent(false);
     }
   };
 
-  const checkedInCount = analytics?.checkedInCount || 0;
-  const registeredCount = analytics?.registeredCount || 0;
-  const queueCount = analytics?.recentCheckInRate || 0;
-  const notArrivedCount = Math.max(0, registeredCount - checkedInCount - queueCount);
-  const progressTotal = Math.max(registeredCount, 1);
-  const velocityPoints = analytics?.checkInsOverTime?.slice(-8).map((point) => point.count) || [2, 4, 3, 7, 5, 8, 6, liveVelocityBonus / 12];
-  const maxVelocity = Math.max(...velocityPoints, 1);
+  const goToSuperAdmin = () => (onNavigateToSuperAdmin ? onNavigateToSuperAdmin() : (window.location.href = '/super-admin'));
+  const goToGuests = () => document.getElementById('guests')?.scrollIntoView({ behavior: 'smooth' });
 
-  const getInitials = (name: string) => {
-    const parts = name.trim().split(' ');
-    return parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}`.toUpperCase() : name.slice(0, 2).toUpperCase() || 'GK';
-  };
+  const checkedIn = analytics?.checkedInCount || 0;
+  const registered = analytics?.registeredCount || 0;
+  const notArrived = Math.max(0, registered - checkedIn);
+  const last15 = analytics?.recentCheckInRate || 0;
+  const pct = registered > 0 ? Math.round((checkedIn / registered) * 100) : 0;
 
-  const filterPills = [
-    { key: 'all', label: 'All Attendees', count: totalAttendees },
-    { key: 'checked-in', label: 'Admitted', count: checkedInCount },
-    { key: 'not-checked-in', label: 'Pending Entry', count: Math.max(0, registeredCount - checkedInCount) },
+  // Chart data comes straight from analytics. No data, no chart.
+  const series = (analytics?.checkInsOverTime || []).slice(-10).map((p: any) => ({
+    count: Number(p.count) || 0,
+    label: String(p.time ?? p.label ?? p.hour ?? p.bucket ?? ''),
+  }));
+  const chartMax = Math.max(...series.map((s) => s.count), 1);
+  const hasChart = series.some((s) => s.count > 0);
+
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const meta = selectedEvent ? statusMeta[selectedEvent.status] : null;
+
+  const statusTabs = [
+    { key: 'all', label: 'Everyone' },
+    { key: 'checked-in', label: 'Checked in' },
+    { key: 'not-checked-in', label: 'Not arrived' },
   ];
-  const chartCoordinates = velocityPoints.map((point, index) => `${(index / Math.max(velocityPoints.length - 1, 1)) * 100},${54 - (point / maxVelocity) * 42}`).join(' ');
-  const chartArea = `0,58 ${chartCoordinates} 100,58`;
+
+  const navItem = (active: boolean) =>
+    `flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${active ? BRAND_ACCENT : 'text-stone-600 hover:bg-[#f0f3f2]'}`;
 
   return (
-    <div className="min-h-screen bg-background text-slate-200 selection:bg-brand-purple/30 selection:text-white">
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-[76px] flex-col items-center border-r border-white/10 bg-slate-950/75 py-5 backdrop-blur-xl lg:flex">
-        <button onClick={() => window.scrollTo(0, 0)} className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-purple text-white shadow-glow-purple" aria-label="GateKeeper home"><Zap size={18} /></button>
-        <div className="my-6 h-px w-8 bg-white/10" />
-        <nav className="flex flex-1 flex-col items-center gap-3" aria-label="Workspace navigation">
-          <button className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-purple/15 text-brand-purple-hi" title="Overview"><LayoutDashboard size={18} /></button>
-          <button onClick={() => selectedEvent && onEnterLiveMode(selectedEvent.id)} className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white/5 hover:text-white" title="Live scanner"><QrCode size={18} /></button>
-          <button onClick={() => document.getElementById('attendees-console')?.scrollIntoView({ behavior: 'smooth' })} className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white/5 hover:text-white" title="Attendees"><UsersRound size={18} /></button>
-          <button onClick={() => selectedEvent && onViewAuditLog(selectedEvent.id)} className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-white/5 hover:text-white" title="Audit log"><Clipboard size={18} /></button>
-          <div className="my-2 h-px w-6 bg-white/10" />
-          <button
-            onClick={() => onNavigateToSuperAdmin ? onNavigateToSuperAdmin() : (window.location.href = '/super-admin')}
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 border border-amber-500/30 transition shadow-glow-amber"
-            title="Super Admin Terminal"
-          >
-            <Shield size={18} />
-          </button>
-        </nav>
-        <button onClick={logout} className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-500 transition hover:bg-red-500/10 hover:text-red-300" title="Log out"><LogOut size={18} /></button>
-      </aside>
-
-      <div className="lg:pl-[76px]">
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-slate-900/60 backdrop-blur-md">
-          <div className="mx-auto flex h-[68px] max-w-[1480px] items-center justify-between gap-4 px-4 sm:px-6 xl:px-8">
-            <div className="flex items-center gap-3">
-              <button onClick={() => setMobileNavOpen((value) => !value)} className="rounded-lg p-2 text-slate-400 hover:bg-white/5 hover:text-white lg:hidden" aria-label="Open menu"><Menu size={20} /></button>
-              <div>
-                <p className="hidden text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 sm:block">Organizer workspace</p>
-                <h1 className="font-display text-lg font-bold tracking-tight text-white">GateKeeper <span className="text-brand-purple-hi">/</span> Overview</h1>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <button
-                onClick={() => onNavigateToSuperAdmin ? onNavigateToSuperAdmin() : (window.location.href = '/super-admin')}
-                className="flex items-center gap-1.5 rounded-lg border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-orange-500/15 px-3 py-2 text-xs font-bold text-amber-300 hover:border-amber-400 hover:text-white transition shadow-sm"
-                title="Super Admin Dashboard"
-              >
-                <Shield size={14} className="text-amber-400" />
-                <span className="hidden sm:inline">Super Admin</span>
-              </button>
-              <button onClick={() => setShowCommandPalette(true)} className="hidden items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-400 transition hover:border-white/20 hover:text-white sm:flex"><Command size={14} /> Quick actions <kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-500">⌘K</kbd></button>
-              <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 rounded-lg bg-brand-purple px-3 py-2 text-xs font-bold text-white shadow-glow-purple transition hover:brightness-110"><Plus size={15} /> <span className="hidden sm:inline">New event</span></button>
-              <div className="hidden h-7 w-px bg-white/10 sm:block" />
-              <div className="flex items-center gap-2">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-slate-800 text-xs font-bold text-slate-300" title={organizer?.name || 'Organizer'}>{organizer?.name ? getInitials(organizer.name) : 'GK'}</div>
-                <button onClick={logout} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400 transition hover:border-red-400/30 hover:bg-red-500/10 hover:text-red-300" title="Log out" aria-label="Log out"><LogOut size={16} /></button>
-              </div>
+    <div className="min-h-screen bg-[#e4e8e7] p-0 text-stone-900 lg:p-6">
+      <div className="mx-auto flex min-h-screen max-w-[1440px] overflow-hidden bg-[#f1f5f4] lg:min-h-[calc(100vh-3rem)] lg:rounded-[28px]">
+        {/* Sidebar */}
+        <aside className="hidden w-60 shrink-0 flex-col bg-white/60 px-4 py-6 lg:flex">
+          <div className="mb-8 flex items-center gap-2.5 px-2">
+            <BrandLogo className="h-8 w-8 rounded-lg" />
+            <span className="text-lg font-bold tracking-tight">GateKeeper</span>
+          </div>
+          <nav className="space-y-1">
+            <button className={navItem(true)}><LayoutDashboard size={17} /> Dashboard</button>
+            <button className={navItem(false)} onClick={() => selectedEvent && onEnterLiveMode(selectedEvent.id)}><QrCode size={17} /> Scanner</button>
+            <button className={navItem(false)} onClick={goToGuests}><Users size={17} /> Guests</button>
+            <button className={navItem(false)} onClick={() => selectedEvent && onViewAuditLog(selectedEvent.id)}><ClipboardList size={17} /> Audit log</button>
+            <button className={navItem(false)} onClick={goToSuperAdmin}><ShieldCheck size={17} /> Super admin</button>
+          </nav>
+          <div className="mt-auto flex items-center gap-3 px-2 pt-6">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#d8d2fb] text-sm font-bold text-stone-800">{initialsOf(organizer?.name)}</div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{organizer?.name || 'Organizer'}</div>
+              <button onClick={logout} className="flex items-center gap-1 text-xs text-stone-500 hover:text-stone-900"><LogOut size={12} /> Log out</button>
             </div>
           </div>
-        </header>
+        </aside>
 
-        {mobileNavOpen && <div className="fixed inset-0 z-20 bg-black/50 lg:hidden" onClick={() => setMobileNavOpen(false)} />}
-        <div className={`fixed left-0 top-[68px] z-30 w-64 border-r border-white/10 bg-slate-950/95 p-4 backdrop-blur-xl transition-transform lg:hidden ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-          <div className="mb-4 text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Workspace</div>
-          <div className="space-y-1">
-            <button onClick={() => setMobileNavOpen(false)} className="flex w-full items-center gap-3 rounded-lg bg-brand-purple/15 px-3 py-3 text-sm font-semibold text-brand-purple-hi"><LayoutDashboard size={17} /> Overview</button>
-            <button onClick={() => { setMobileNavOpen(false); selectedEvent && onEnterLiveMode(selectedEvent.id); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm text-slate-400 hover:bg-white/5 hover:text-white"><QrCode size={17} /> Live scanner</button>
-            <button onClick={() => { setMobileNavOpen(false); document.getElementById('attendees-console')?.scrollIntoView({ behavior: 'smooth' }); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm text-slate-400 hover:bg-white/5 hover:text-white"><UsersRound size={17} /> Attendees</button>
-            <button onClick={() => { setMobileNavOpen(false); onNavigateToSuperAdmin ? onNavigateToSuperAdmin() : (window.location.href = '/super-admin'); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm text-amber-300 bg-amber-500/10 border border-amber-500/20"><Shield size={17} /> Super Admin</button>
+        {/* Main */}
+        <div className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:py-7">
+          {/* Mobile top bar */}
+          <div className="mb-5 flex items-center justify-between lg:hidden">
+            <span className="text-lg font-bold tracking-tight">GateKeeper</span>
+            <div className="flex items-center gap-4 text-sm text-stone-600">
+              <button onClick={() => selectedEvent && onEnterLiveMode(selectedEvent.id)}>Scanner</button>
+              <button onClick={goToGuests}>Guests</button>
+              <button onClick={logout}>Log out</button>
+            </div>
           </div>
-        </div>
 
-        {toastMessage && <div className="fixed right-4 top-[82px] z-50 flex max-w-[calc(100vw-2rem)] items-center gap-3 rounded-xl border border-success/40 bg-slate-900/95 px-4 py-3 text-sm font-semibold text-emerald-300 shadow-2xl backdrop-blur-xl animate-[slideUp_0.3s_ease-out]" role="status"><CheckCircle2 size={17} /><span>{toastMessage}</span></div>}
+          <header className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+              <p className="mt-0.5 text-sm text-stone-500">{today}</p>
+            </div>
+            <button onClick={() => setShowCreateModal(true)} className={btnBrand}><Plus size={16} /> New event</button>
+          </header>
 
-        <main className="mx-auto max-w-[1480px] space-y-5 px-4 py-6 pb-24 sm:px-6 lg:space-y-6 xl:px-8">
-          <section className="relative overflow-visible rounded-2xl border border-white/10 bg-slate-900/40 p-5 backdrop-blur-md sm:p-6">
-            <div className="absolute inset-0 -z-10 overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_80%_10%,rgba(99,102,241,0.15),transparent_36%)]" />
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-              <div className="min-w-0">
-                <div className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500"><Radio size={13} className="text-brand-purple-hi" /> Active event</div>
-                {loadingEvents ? <div className="h-8 w-56 animate-pulse rounded bg-white/10" /> : events.length ? <div className="relative">
-                  <button onClick={() => setShowEventDropdown((value) => !value)} className="flex max-w-full items-center gap-2 text-left text-2xl font-bold tracking-tight text-white transition hover:text-brand-purple-hi sm:text-3xl"><span className="truncate">{selectedEvent?.name || 'Select event'}</span><ChevronDown size={19} className="shrink-0 text-slate-500" /></button>
-                  {selectedEvent && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-400"><span className="flex items-center gap-1.5"><CalendarDays size={14} /> {selectedEvent.date}</span><span className="text-slate-600">•</span><span className="truncate">{selectedEvent.venue}</span></div>}
-                  {showEventDropdown && <div className="absolute left-0 top-full z-40 mt-3 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-white/10 bg-slate-900 p-2 shadow-2xl"><div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">Switch event</div>{events.map((event) => <button key={event.id} onClick={() => { setSelectedEventId(event.id); setShowEventDropdown(false); setPage(1); }} className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-3 text-left transition ${event.id === selectedEventId ? 'bg-brand-purple/15' : 'hover:bg-white/5'}`}><span className="min-w-0"><span className="block truncate text-sm font-semibold text-white">{event.name}</span><span className="text-xs text-slate-500">{event.date}</span></span><StatusPill status={event.status} /></button>)}</div>}
-                </div> : <div className="text-sm text-slate-400">No events created yet.</div>}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-                {selectedEvent && <StatusPill status={selectedEvent.status} />}
-                {selectedEvent?.status === 'DRAFT' && <button onClick={handlePublish} className="btn-secondary"><Send size={15} /> Publish</button>}
-                {selectedEvent?.status === 'UPCOMING' && <button onClick={handleStartEvent} className="btn-primary"><QrCode size={15} /> Start check-in</button>}
-                {selectedEvent?.status === 'LIVE' && <button onClick={() => onEnterLiveMode(selectedEvent.id)} className="btn-primary"><QrCode size={15} /> Open scanner</button>}
-                {selectedEvent && <button onClick={handleCopyLink} className="btn-glass"><Copy size={15} /> <span className="hidden sm:inline">{copiedLink ? 'Link copied' : 'Copy registration link'}</span></button>}
-                {selectedEvent && (
-                  <button
-                    onClick={() => {
-                      setDeleteError(null);
-                      setShowDeleteModal(true);
-                    }}
-                    className="btn-glass text-rose-400 hover:text-rose-300 hover:border-rose-500/40 hover:bg-rose-500/10 transition-colors"
-                    title="Delete event"
-                    aria-label="Delete event"
-                  >
-                    <Trash2 size={15} />
-                    <span className="hidden sm:inline">Delete event</span>
-                  </button>
-                )}
-                <div className="relative">
-                  <button onClick={() => setShowActionMenu((value) => !value)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="More event actions">
-                    <MoreHorizontal size={18} />
-                  </button>
-                  {showActionMenu && (
-                    <div className="absolute right-0 top-full z-40 mt-2 w-48 rounded-xl border border-white/10 bg-slate-900 p-1.5 shadow-2xl">
-                      <button onClick={() => { setShowActionMenu(false); selectedEvent && onViewAuditLog(selectedEvent.id); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-300 hover:bg-white/5">
-                        <Clipboard size={14} /> Audit log
+          {toast && (
+            <div role="status" className={`fixed right-4 top-4 z-50 max-w-sm rounded-xl px-4 py-3 text-sm shadow-lg ${toast.error ? 'bg-red-700 text-white' : 'bg-stone-900 text-white'}`}>
+              {toast.msg}
+            </div>
+          )}
+
+          {loadingEvents ? (
+            <div className="mt-6 h-40 animate-pulse rounded-2xl bg-white" />
+          ) : events.length === 0 ? (
+            <div className={`${panel} mt-6 py-16 text-center`}>
+              <h2 className="text-xl font-bold">Create your first event</h2>
+              <p className="mx-auto mt-2 max-w-sm text-sm text-stone-500">
+                Add a date and venue, publish it, then share the sign-up link. Guests get a QR ticket by email.
+              </p>
+              <button onClick={() => setShowCreateModal(true)} className={`${btnBrand} mt-6`}><Plus size={16} /> New event</button>
+            </div>
+          ) : (
+            <div className="mt-6 grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+              {/* Left column */}
+              <div className="min-w-0 space-y-5">
+                {/* Pastel stats */}
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-2xl bg-[#dcd7fb] p-5">
+                    <p className="text-xs font-medium text-stone-700">Registered</p>
+                    <p className="mt-3 text-3xl font-bold tabular-nums">{registered}</p>
+                    <p className="mt-1 text-xs text-stone-600">{selectedEvent?.name}</p>
+                  </div>
+                  <div className="rounded-2xl bg-[#c3dcfb] p-5">
+                    <p className="text-xs font-medium text-stone-700">Checked in</p>
+                    <p className="mt-3 text-3xl font-bold tabular-nums">{checkedIn}</p>
+                    <p className="mt-1 text-xs text-stone-600">{notArrived} still to arrive</p>
+                  </div>
+                  <div className="rounded-2xl bg-[#b0e9c9] p-5">
+                    <p className="text-xs font-medium text-stone-700">Arrival rate</p>
+                    <p className="mt-3 text-3xl font-bold tabular-nums">{pct}%</p>
+                    <p className="mt-1 text-xs text-stone-600">{last15} in the last 15 min</p>
+                  </div>
+                </div>
+
+                {/* Chart + quick actions */}
+                <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+                  <div className={panel}>
+                    <div className="flex items-center justify-between">
+                      <h2 className="font-semibold">Check-ins over time</h2>
+                      <button onClick={handleExportCSV} className="rounded-lg brand-gradient px-3 py-1 text-xs font-semibold hover:brightness-110">Export</button>
+                    </div>
+                    {hasChart ? (
+                      <div className="mt-5 flex h-44 items-end gap-2 border-b border-stone-200">
+                        {series.map((s, i) => (
+                          <div key={i} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
+                            <span className="text-[10px] tabular-nums text-stone-500">{s.count}</span>
+                            <div
+                              className={`w-full max-w-[28px] rounded-t-md ${i === series.length - 1 ? 'bg-[#6fd9a0]' : 'bg-[#cfc9f7]'}`}
+                              style={{ height: `${Math.max(4, (s.count / chartMax) * 100)}%` }}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-5 flex h-44 items-center justify-center rounded-xl bg-[#f4f7f6] text-center text-sm text-stone-500">
+                        Check-ins will chart here once the gates open.
+                      </div>
+                    )}
+                    {hasChart && (
+                      <div className="mt-2 flex gap-2">
+                        {series.map((s, i) => (
+                          <span key={i} className="flex-1 truncate text-center text-[10px] text-stone-400">{s.label}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={panel}>
+                    <h2 className="font-semibold">Shortcuts</h2>
+                    <p className="text-xs text-stone-500">Things you'll need on the day</p>
+                    <div className="mt-4 space-y-2">
+                      {[
+                        { label: 'Open scanner', onClick: () => selectedEvent && onEnterLiveMode(selectedEvent.id) },
+                        { label: 'View audit log', onClick: () => selectedEvent && onViewAuditLog(selectedEvent.id) },
+                        { label: 'Download guest list', onClick: handleExportCSV },
+                      ].map((row) => (
+                        <button key={row.label} onClick={row.onClick} className="flex w-full items-center justify-between rounded-xl bg-[#f4f7f6] px-4 py-3 text-sm font-medium text-stone-700 transition hover:bg-[#e9eeec]">
+                          {row.label} <ChevronRight size={15} className="text-stone-400" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Guests */}
+                <div id="guests" className={panel}>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h2 className="text-lg font-semibold">
+                      Guests <span className="ml-1 text-sm font-normal text-stone-400">{totalAttendees}</span>
+                    </h2>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <div className="relative sm:w-64">
+                        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                        <input
+                          ref={searchInputRef}
+                          type="text"
+                          placeholder="Search name or ticket"
+                          value={searchQuery}
+                          onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                          className={`${field} pl-9`}
+                        />
+                      </div>
+                      <select
+                        value={typeFilter}
+                        onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+                        className={`${field} sm:w-36`}
+                        aria-label="Filter by pass type"
+                      >
+                        <option value="ALL">All passes</option>
+                        <option value="VIP">VIP</option>
+                        <option value="Regular">Regular</option>
+                        <option value="Speaker">Speaker</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 inline-flex rounded-xl bg-[#f0f3f2] p-1">
+                    {statusTabs.map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => { setStatusFilter(tab.key); setPage(1); }}
+                        className={`rounded-lg px-3.5 py-1.5 text-sm transition ${statusFilter === tab.key ? 'bg-white font-semibold shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
+                      >
+                        {tab.label}
                       </button>
-                      <button onClick={() => { setShowActionMenu(false); handleExportCSV(); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-slate-300 hover:bg-white/5">
-                        <Download size={14} /> Export attendees
-                      </button>
-                      <div className="my-1 border-t border-white/5" />
-                      <button onClick={() => { setShowActionMenu(false); setDeleteError(null); setShowDeleteModal(true); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs text-rose-400 hover:bg-rose-500/10">
-                        <Trash2 size={14} /> Delete event
-                      </button>
+                    ))}
+                  </div>
+
+                  {selectedAttendeeIds.length > 0 && (
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#eefbc4] px-4 py-2.5 text-sm">
+                      <span className="font-medium">{selectedAttendeeIds.length} selected</span>
+                      <div className="flex gap-2">
+                        <button onClick={handleBulkAdmit} className={btnDark}>Check in selected</button>
+                        <button onClick={() => setSelectedAttendeeIds([])} className={btnSoft}>Clear</button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-stone-200 text-xs text-stone-400">
+                          <th className="w-9 py-3 pr-2 font-medium">
+                            <input type="checkbox" checked={attendees.length > 0 && selectedAttendeeIds.length === attendees.length} onChange={toggleAllAttendees} className="accent-stone-900" aria-label="Select all" />
+                          </th>
+                          <th className="py-3 pr-4 font-medium">Name</th>
+                          <th className="hidden py-3 pr-4 font-medium sm:table-cell">Ticket</th>
+                          <th className="hidden py-3 pr-4 font-medium md:table-cell">Pass</th>
+                          <th className="py-3 pr-4 font-medium">Status</th>
+                          <th className="py-3 text-right font-medium"><span className="sr-only">Actions</span></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100">
+                        {loadingAttendees ? (
+                          <tr><td colSpan={6} className="py-12 text-center text-stone-400">Loading…</td></tr>
+                        ) : attendees.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-14 text-center">
+                              {searchQuery || statusFilter !== 'all' || typeFilter !== 'ALL' ? (
+                                <p className="font-medium text-stone-700">No one matches that filter.</p>
+                              ) : (
+                                <>
+                                  <p className="font-semibold">Nobody has registered yet</p>
+                                  <p className="mt-1 text-stone-500">Share the sign-up link and guests will appear here.</p>
+                                  <button onClick={handleCopyLink} className={`${btnBrand} mt-4`}><Copy size={15} /> {copiedLink ? 'Copied' : 'Copy sign-up link'}</button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ) : (
+                          attendees.map((a) => (
+                            <tr key={a.id} className="hover:bg-[#f7faf9]">
+                              <td className="py-3 pr-2">
+                                <input type="checkbox" checked={selectedAttendeeIds.includes(a.id)} onChange={() => toggleAttendeeSelection(a.id)} className="accent-stone-900" aria-label={`Select ${a.name}`} />
+                              </td>
+                              <td className="py-3 pr-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#dcd7fb] text-xs font-bold text-stone-700 sm:flex">{initialsOf(a.name)}</div>
+                                  <div className="min-w-0">
+                                    <div className="truncate font-medium">{a.name}</div>
+                                    <div className="truncate text-xs text-stone-500">{a.email}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="hidden py-3 pr-4 font-mono text-xs text-stone-500 sm:table-cell">{a.ticketCode}</td>
+                              <td className="hidden py-3 pr-4 md:table-cell">{a.ticketType}</td>
+                              <td className="py-3 pr-4">
+                                {a.checkedInAt ? (
+                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">Checked in</span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600">Not arrived</span>
+                                )}
+                              </td>
+                              <td className="py-3">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    onClick={() => handleToggleCheckIn(a)}
+                                    className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition ${a.checkedInAt ? 'bg-[#f0f3f2] text-stone-600 hover:bg-[#e6ebe9]' : BRAND_ACCENT}`}
+                                  >
+                                    {a.checkedInAt ? 'Undo' : 'Check in'}
+                                  </button>
+                                  <button onClick={() => setQrModalAttendee(a)} className="rounded-lg p-1.5 text-stone-500 hover:bg-[#f0f3f2] hover:text-stone-900" title="Show QR code" aria-label="Show QR code"><QrCode size={16} /></button>
+                                  {!a.emailSent && (
+                                    <button onClick={() => handleResendTicket(a)} className="rounded-lg p-1.5 text-stone-500 hover:bg-[#f0f3f2] hover:text-stone-900" title="Resend ticket email" aria-label="Resend ticket email"><Mail size={16} /></button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="mt-3 flex items-center justify-between border-t border-stone-100 pt-4 text-sm text-stone-500">
+                      <span>Page {page} of {totalPages}</span>
+                      <div className="flex gap-2">
+                        <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className={btnSoft}>Previous</button>
+                        <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className={btnSoft}>Next</button>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* Right column */}
+              <div className="space-y-5">
+                {selectedEvent && (
+                  <div className="relative overflow-hidden rounded-2xl bg-[#1f8f8a] p-5 text-white">
+                    <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/10" />
+                    <div className="pointer-events-none absolute -bottom-10 right-10 h-24 w-24 rounded-full bg-white/10" />
+                    <h2 className="relative text-lg font-semibold">Get people signed up</h2>
+                    <p className="relative mt-1 text-sm text-white/80">Share one link. Guests register and get their QR ticket by email.</p>
+                    <button onClick={handleCopyLink} className={`${btnBrand} relative mt-4`}>
+                      <Copy size={15} /> {copiedLink ? 'Link copied' : 'Copy sign-up link'}
+                    </button>
+                  </div>
+                )}
+
+                {selectedEvent && (
+                  <div className={panel}>
+                    <div className="flex items-center gap-2 text-sm text-stone-500">
+                      {meta && <span className={`h-2 w-2 rounded-full ${meta.dot}`} />}
+                      {meta?.label}
+                    </div>
+                    <h2 className="mt-1 text-lg font-semibold leading-snug">{selectedEvent.name}</h2>
+                    <p className="mt-1 text-sm text-stone-500">{selectedEvent.date} · {selectedEvent.venue}</p>
+                    <div className="mt-4">
+                      {selectedEvent.status === 'DRAFT' && <button onClick={handlePublish} className={`${btnDark} w-full`}>Publish event</button>}
+                      {selectedEvent.status === 'UPCOMING' && <button onClick={handleStartEvent} className={`${btnDark} w-full`}><QrCode size={15} /> Start check-in</button>}
+                      {selectedEvent.status === 'LIVE' && <button onClick={() => onEnterLiveMode(selectedEvent.id)} className={`${btnDark} w-full`}><QrCode size={15} /> Open scanner</button>}
+                      {selectedEvent.status === 'ENDED' && <button onClick={() => onEnterLiveMode(selectedEvent.id)} className={`${btnSoft} w-full`}>View scanner</button>}
+                    </div>
+                    <button
+                      onClick={() => { setDeleteError(null); setShowDeleteModal(true); }}
+                      className="mt-4 inline-flex items-center gap-1.5 text-xs text-red-700 hover:underline"
+                    >
+                      <Trash2 size={13} /> Delete event
+                    </button>
+                  </div>
+                )}
+
+                <div className={panel}>
+                  <h2 className="font-semibold">Your events</h2>
+                  <div className="mt-3 space-y-2">
+                    {events.map((ev) => {
+                      const m = statusMeta[ev.status];
+                      const active = ev.id === selectedEventId;
+                      return (
+                        <button
+                          key={ev.id}
+                          onClick={() => { setSelectedEventId(ev.id); setPage(1); setSelectedAttendeeIds([]); }}
+                          className={`flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-left transition ${active ? 'bg-[#eefbc4]' : 'bg-[#f4f7f6] hover:bg-[#e9eeec]'}`}
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-medium">{ev.name}</span>
+                            <span className="flex items-center gap-1.5 text-xs text-stone-500">
+                              {m && <span className={`h-1.5 w-1.5 rounded-full ${m.dot}`} />} {ev.date}
+                            </span>
+                          </span>
+                          <ChevronRight size={15} className="shrink-0 text-stone-400" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button onClick={() => setShowCreateModal(true)} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[#c3dcfb] py-2.5 text-sm font-semibold text-stone-800 transition hover:bg-[#b2d1f8]">
+                    <Plus size={15} /> Add event
+                  </button>
+                </div>
+              </div>
             </div>
-          </section>
-
-          {selectedEvent && <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40 p-5 backdrop-blur-md transition hover:border-success/30"><div className="mb-4 flex items-start justify-between"><div><p className="text-xs font-semibold text-slate-400">Check-in progress</p><p className="mt-2 text-3xl font-bold tracking-tight text-white">{checkedInCount}<span className="ml-1 text-base font-medium text-slate-500">/ {registeredCount}</span></p></div><div className="rounded-lg bg-success/10 p-2 text-emerald-300"><UsersRound size={18} /></div></div><div className="mb-3 flex h-2 overflow-hidden rounded-full bg-slate-950"><span className="bg-emerald-400 transition-all" style={{ width: `${(checkedInCount / progressTotal) * 100}%` }} /><span className="bg-amber-400 transition-all" style={{ width: `${(queueCount / progressTotal) * 100}%` }} /><span className="bg-slate-700 transition-all" style={{ width: `${(notArrivedCount / progressTotal) * 100}%` }} /></div><div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-slate-400"><span><i className="mr-1.5 inline-block h-2 w-2 rounded-full bg-emerald-400" />Checked in {checkedInCount}</span><span><i className="mr-1.5 inline-block h-2 w-2 rounded-full bg-amber-400" />In queue {queueCount}</span><span><i className="mr-1.5 inline-block h-2 w-2 rounded-full bg-slate-600" />Not arrived {notArrivedCount}</span></div><div className="mt-4 flex items-center gap-2 border-t border-white/10 pt-3 text-xs text-emerald-300"><Activity size={14} /> Peak arrival rate <strong>{analytics?.recentCheckInRate || 0}/15 min</strong></div></article>
-            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40 p-5 backdrop-blur-md transition hover:border-brand-purple/30"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold text-slate-400">Scanner velocity</p><div className="mt-2 flex items-baseline gap-2"><p className="text-3xl font-bold tracking-tight text-white">{liveVelocityBonus}</p><span className="text-sm text-slate-500">scans/min</span></div></div><span className="flex items-center gap-1 rounded-full bg-success/10 px-2 py-1 text-[11px] font-bold text-emerald-300"><ArrowUpRight size={13} /> 12.8%</span></div><svg viewBox="0 0 100 60" preserveAspectRatio="none" className="mt-4 h-16 w-full overflow-visible"><defs><linearGradient id="velocity-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#818cf8" stopOpacity=".34" /><stop offset="1" stopColor="#818cf8" stopOpacity="0" /></linearGradient></defs><polyline points={chartArea} fill="url(#velocity-fill)" stroke="none" /><polyline points={chartCoordinates} fill="none" stroke="#a5b4fc" strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" /></svg><div className="mt-1 flex justify-between text-[10px] text-slate-600"><span>9:00 AM</span><span>Now</span></div></article>
-            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40 p-5 backdrop-blur-md transition hover:border-brand-blue/30"><div className="flex items-start justify-between"><div><p className="text-xs font-semibold text-slate-400">Gate health</p><p className="mt-2 flex items-center gap-2 text-lg font-bold text-emerald-300"><span className="relative flex h-2.5 w-2.5"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" /><span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" /></span> Syncing live</p><p className="mt-1 text-xs text-slate-500">2s ago · 4 of 4 gates connected</p></div><div className="rounded-lg bg-brand-blue/10 p-2 text-cyan-300"><ShieldCheck size={18} /></div></div><div className="mt-4 grid grid-cols-3 gap-2 text-center text-[10px] text-slate-500"><span className="rounded-lg bg-white/5 px-2 py-2"><strong className="block text-sm text-white">4</strong>Gates</span><span className="rounded-lg bg-white/5 px-2 py-2"><strong className="block text-sm text-white">98ms</strong>Latency</span><span className="rounded-lg bg-white/5 px-2 py-2"><strong className="block text-sm text-white">0</strong>Alerts</span></div><button onClick={triggerWorkflowRun} disabled={workflowRunning} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-bold text-slate-300 transition hover:bg-white/10 disabled:opacity-50">{workflowRunning ? <RefreshCw size={14} className="animate-spin" /> : <RefreshCw size={14} />}{workflowRunning ? 'Syncing gates...' : 'Run auto-sync'}</button></article>
-          </section>}
-
-          <section id="attendees-console" className="overflow-hidden rounded-2xl border border-white/10 bg-slate-900/40 backdrop-blur-md">
-            <div className="border-b border-white/10 p-5 sm:p-6"><div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div><div className="flex items-center gap-2"><UsersRound size={19} className="text-brand-purple-hi" /><h2 className="text-lg font-bold text-white">Attendee directory</h2><span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] font-bold text-slate-400">{totalAttendees}</span></div><p className="mt-1 text-sm text-slate-500">Manage guest access and keep every gate moving.</p></div><div className="flex flex-col gap-2 sm:flex-row"><label className="relative min-w-0 sm:w-72"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" /><input ref={searchInputRef} type="text" placeholder="Search by name or ticket..." value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setPage(1); }} className="input-dark pl-10 pr-10" /><kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-600">/</kbd></label><button onClick={handleExportCSV} className="btn-glass"><Download size={15} /> Export</button></div></div><div className="mt-5 flex flex-wrap items-center gap-2"><span className="mr-1 text-[10px] font-bold uppercase tracking-wider text-slate-600"><Filter size={13} className="mr-1 inline" /> Status</span>{filterPills.map((pill) => <button key={pill.key} onClick={() => { setStatusFilter(pill.key); setPage(1); }} className={`filter-pill ${statusFilter === pill.key ? 'active' : ''}`}>{pill.label}<span className="rounded-full bg-slate-950/70 px-1.5 py-0.5 text-[10px]">{pill.count}</span></button>)}<span className="mx-1 hidden h-5 w-px bg-white/10 sm:block" />{['ALL', 'VIP', 'Regular', 'Speaker'].map((type) => <button key={type} onClick={() => { setTypeFilter(type); setPage(1); }} className={`filter-pill ${typeFilter === type ? 'active' : ''}`}>{type === 'ALL' ? 'All passes' : type}</button>)}</div></div>
-            {selectedAttendeeIds.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 border-b border-brand-purple/20 bg-brand-purple/10 px-5 py-3 text-sm"><span className="font-semibold text-brand-purple-hi">{selectedAttendeeIds.length} selected</span><div className="flex gap-2"><button onClick={handleBulkAdmit} className="btn-primary py-1.5"><Check size={14} /> Admit selected</button><button onClick={() => setSelectedAttendeeIds([])} className="btn-glass py-1.5">Clear</button></div></div>}
-            <div className="hidden overflow-x-auto md:block"><table className="w-full text-left text-sm"><thead className="border-b border-white/10 bg-slate-950/30 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500"><tr><th className="w-12 px-5 py-3"><input type="checkbox" checked={attendees.length > 0 && selectedAttendeeIds.length === attendees.length} onChange={toggleAllAttendees} className="accent-brand-purple" aria-label="Select all attendees" /></th><th className="px-3 py-3">Attendee</th><th className="px-3 py-3">Ticket code</th><th className="px-3 py-3">Pass type</th><th className="px-3 py-3">Status</th><th className="px-5 py-3 text-right">Actions</th></tr></thead><tbody className="divide-y divide-white/5">{loadingAttendees ? <tr><td colSpan={6} className="py-16 text-center text-sm text-slate-500">Loading directory...</td></tr> : attendees.length === 0 ? <tr><td colSpan={6}><div className="flex flex-col items-center justify-center px-6 py-16 text-center"><div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-purple/20 bg-brand-purple/10 text-brand-purple-hi"><Ticket size={25} /></div><h3 className="text-base font-bold text-white">No attendees found</h3><p className="mt-1 max-w-sm text-sm text-slate-500">Import your guest list or share the registration link to start building your directory.</p><div className="mt-5 flex flex-wrap justify-center gap-2"><button onClick={handleImportCsv} className="btn-primary"><FileUp size={15} /> Import CSV</button><button onClick={handleCopyLink} className="btn-glass"><Copy size={15} /> Share registration link</button></div></div></td></tr> : attendees.map((attendee) => <tr key={attendee.id} className="transition hover:bg-white/[0.035]"><td className="px-5 py-4"><input type="checkbox" checked={selectedAttendeeIds.includes(attendee.id)} onChange={() => toggleAttendeeSelection(attendee.id)} className="accent-brand-purple" aria-label={`Select ${attendee.name}`} /></td><td className="px-3 py-4"><div className="flex items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-slate-800 text-xs font-bold text-slate-300">{getInitials(attendee.name)}</div><div className="min-w-0"><div className="truncate font-semibold text-white">{attendee.name}</div><div className="truncate text-xs text-slate-500">{attendee.email}</div></div></div></td><td className="px-3 py-4 font-mono text-xs font-semibold text-slate-400">{attendee.ticketCode}</td><td className="px-3 py-4"><span className={`rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider ${attendee.ticketType === 'VIP' ? 'bg-warn/15 text-amber-300' : attendee.ticketType === 'Speaker' ? 'bg-brand-blue/15 text-cyan-300' : 'bg-white/10 text-slate-300'}`}>{attendee.ticketType}</span></td><td className="px-3 py-4">{attendee.checkedInAt ? <span className="status-admitted"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Admitted</span> : <span className="status-pending"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> Pending</span>}</td><td className="px-5 py-4"><div className="flex justify-end gap-1.5"><button onClick={() => handleToggleCheckIn(attendee)} className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${attendee.checkedInAt ? 'bg-white/5 text-slate-400 hover:text-white' : 'bg-brand-purple text-white hover:brightness-110'}`}>{attendee.checkedInAt ? 'Undo' : 'Admit'}</button><button onClick={() => setQrModalAttendee(attendee)} className="icon-button" title="View QR"><QrCode size={15} /></button>{!attendee.emailSent && <button onClick={() => handleResendTicket(attendee)} className="icon-button" title="Resend ticket"><Mail size={15} /></button>}</div></td></tr>)}</tbody></table></div>
-            <div className="divide-y divide-white/10 md:hidden">{loadingAttendees ? <div className="py-16 text-center text-sm text-slate-500">Loading directory...</div> : attendees.length === 0 ? <div className="flex flex-col items-center px-6 py-14 text-center"><div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-brand-purple/20 bg-brand-purple/10 text-brand-purple-hi"><Ticket size={25} /></div><h3 className="font-bold text-white">No attendees found</h3><p className="mt-1 text-sm text-slate-500">Import CSV or share the registration link.</p><button onClick={handleCopyLink} className="btn-primary mt-4"><Copy size={15} /> Share link</button></div> : attendees.map((attendee) => <article key={attendee.id} className="p-4"><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><input type="checkbox" checked={selectedAttendeeIds.includes(attendee.id)} onChange={() => toggleAttendeeSelection(attendee.id)} className="accent-brand-purple" aria-label={`Select ${attendee.name}`} /><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-bold text-slate-300">{getInitials(attendee.name)}</div><div className="min-w-0"><h3 className="truncate font-semibold text-white">{attendee.name}</h3><p className="truncate text-xs text-slate-500">{attendee.email}</p></div></div>{attendee.checkedInAt ? <span className="status-admitted">Admitted</span> : <span className="status-pending">Pending</span>}</div><div className="mt-4 flex items-center justify-between gap-3 pl-[4.5rem]"><div><p className="font-mono text-xs text-slate-400">{attendee.ticketCode}</p><p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">{attendee.ticketType} pass</p></div><div className="flex gap-1.5"><button onClick={() => handleToggleCheckIn(attendee)} className={`rounded-lg px-3 py-2 text-xs font-bold ${attendee.checkedInAt ? 'bg-white/5 text-slate-400' : 'bg-brand-purple text-white'}`}>{attendee.checkedInAt ? 'Undo' : 'Admit'}</button><button onClick={() => setQrModalAttendee(attendee)} className="icon-button"><QrCode size={16} /></button></div></div></article>)}</div>
-            {totalPages > 1 && <div className="flex items-center justify-between border-t border-white/10 px-5 py-4 text-xs text-slate-500"><span>Page {page} of {totalPages}</span><div className="flex gap-2"><button disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="btn-glass py-1.5 disabled:opacity-40">Previous</button><button disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))} className="btn-glass py-1.5 disabled:opacity-40">Next</button></div></div>}
-          </section>
-        </main>
+          )}
+        </div>
       </div>
 
-      <button onClick={() => selectedEvent && onEnterLiveMode(selectedEvent.id)} className="fixed bottom-5 right-5 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-brand-purple text-white shadow-[0_12px_32px_rgba(99,102,241,0.45)] transition hover:scale-105 lg:hidden" aria-label="Open live scanner"><QrCode size={22} /></button>
-
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-4 border-t border-white/10 bg-slate-950/90 px-2 backdrop-blur-xl lg:hidden"><button className="flex flex-col items-center justify-center gap-1 text-brand-purple-hi"><LayoutDashboard size={17} /><span className="text-[10px] font-semibold">Overview</span></button><button onClick={() => selectedEvent && onEnterLiveMode(selectedEvent.id)} className="flex flex-col items-center justify-center gap-1 text-slate-500"><QrCode size={17} /><span className="text-[10px] font-semibold">Scanner</span></button><button onClick={() => document.getElementById('attendees-console')?.scrollIntoView({ behavior: 'smooth' })} className="flex flex-col items-center justify-center gap-1 text-slate-500"><UsersRound size={17} /><span className="text-[10px] font-semibold">Guests</span></button><button onClick={() => setShowCommandPalette(true)} className="flex flex-col items-center justify-center gap-1 text-slate-500"><Command size={17} /><span className="text-[10px] font-semibold">Actions</span></button></nav>
-
-      {showCommandPalette && <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/65 px-4 pt-[15vh] backdrop-blur-sm" onClick={() => setShowCommandPalette(false)}><div className="w-full max-w-lg overflow-hidden rounded-2xl border border-white/10 bg-slate-900 shadow-2xl" onClick={(event) => event.stopPropagation()}><div className="flex items-center gap-3 border-b border-white/10 px-4 py-4"><Search size={18} className="text-slate-500" /><input autoFocus placeholder="What do you want to do?" className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-600" /><kbd className="rounded border border-white/10 px-1.5 py-0.5 text-[10px] text-slate-500">ESC</kbd></div><div className="p-2"><button onClick={() => { setShowCommandPalette(false); selectedEvent && onEnterLiveMode(selectedEvent.id); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-slate-300 hover:bg-brand-purple/10 hover:text-white"><QrCode size={17} className="text-brand-purple-hi" /><span><strong className="block">Open live scanner</strong><small className="text-xs text-slate-500">Launch the gate check-in view</small></span></button><button onClick={() => { setShowCommandPalette(false); document.getElementById('attendees-console')?.scrollIntoView({ behavior: 'smooth' }); searchInputRef.current?.focus(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-slate-300 hover:bg-white/5 hover:text-white"><Search size={17} className="text-slate-500" /><span><strong className="block">Find an attendee</strong><small className="text-xs text-slate-500">Search the directory</small></span></button><button onClick={() => { setShowCommandPalette(false); setShowCreateModal(true); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm text-slate-300 hover:bg-white/5 hover:text-white"><Plus size={17} className="text-slate-500" /><span><strong className="block">Create a new event</strong><small className="text-xs text-slate-500">Set up another check-in workspace</small></span></button></div></div></div>}
-
-      {/* ── Create Modal ── */}
+      {/* Create event */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowCreateModal(false)}>
-          <div className="w-full max-w-lg bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-[slideUp_0.3s_ease-out]" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 border-b border-white/5 flex items-center justify-between bg-slate-900/50">
-              <h3 className="text-xl font-display font-bold text-white">Create New Event</h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-white transition-colors">✕</button>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-900/50 p-4" onClick={() => setShowCreateModal(false)}>
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
+              <h3 className="text-lg font-semibold">New event</h3>
+              <button onClick={() => setShowCreateModal(false)} className="text-stone-400 hover:text-stone-900" aria-label="Close">✕</button>
             </div>
-            
-            <div className="p-6">
-              {createError && <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">{createError}</div>}
-              
-              <form onSubmit={handleCreateEvent} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Event Name</label>
-                  <input type="text" required value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} placeholder="e.g. Developer Summit" className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-white focus:border-brand-purple focus:ring-1 focus:ring-brand-purple transition-all outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Description</label>
-                  <textarea rows={2} value={createForm.description} onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })} placeholder="Summary..." className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-white focus:border-brand-purple focus:ring-1 focus:ring-brand-purple transition-all outline-none resize-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Event Graphic <span className="normal-case font-normal text-slate-500">(optional)</span></label>
-                  <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleEventImageChange} className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-sm text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-purple/20 file:px-3 file:py-2 file:text-xs file:font-bold file:text-brand-purple-hi" />
-                  <p className="mt-1.5 text-[11px] text-slate-500">PNG, JPG, WEBP or GIF up to 2 MB. Attendees will see it on the registration page.</p>
-                  {createForm.imageDataUrl && (
-                    <div className="mt-3 flex items-center gap-3">
-                      <img src={createForm.imageDataUrl} alt="Event graphic preview" className="h-16 w-24 rounded-lg border border-white/10 object-cover" />
-                      <button type="button" onClick={() => setCreateForm({ ...createForm, imageDataUrl: null })} className="text-xs font-semibold text-red-300 hover:text-red-200">Remove graphic</button>
-                    </div>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Date</label>
-                    <input type="date" required value={createForm.date} onChange={(e) => setCreateForm({ ...createForm, date: e.target.value })} className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-white focus:border-brand-purple focus:ring-1 focus:ring-brand-purple transition-all outline-none" />
+            <form onSubmit={handleCreateEvent} className="space-y-4 p-6">
+              {createError && <div className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{createError}</div>}
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Event name</span>
+                <input type="text" required value={createForm.name} onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })} placeholder="Developer Summit" className={field} />
+              </label>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Description <span className="font-normal text-stone-400">(optional)</span></span>
+                <textarea rows={2} value={createForm.description} onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })} className={`${field} resize-none`} />
+              </label>
+              <div className="text-sm">
+                <span className="mb-1 block font-medium">Event image <span className="font-normal text-stone-400">(optional)</span></span>
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={handleEventImageChange} className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#f0f3f2] file:px-3 file:py-2 file:text-sm file:font-medium file:text-stone-700 hover:file:bg-[#e6ebe9]" />
+                <p className="mt-1 text-xs text-stone-500">Shown on the sign-up page. Up to 2 MB.</p>
+                {createForm.imageDataUrl && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <img src={createForm.imageDataUrl} alt="Preview" className="h-16 w-24 rounded-lg border border-stone-200 object-cover" />
+                    <button type="button" onClick={() => setCreateForm({ ...createForm, imageDataUrl: null })} className="text-sm text-red-700 hover:underline">Remove</button>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Time</label>
-                    <input type="text" required value={createForm.startTime} onChange={(e) => setCreateForm({ ...createForm, startTime: e.target.value })} placeholder="10:00 AM" className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-white focus:border-brand-purple focus:ring-1 focus:ring-brand-purple transition-all outline-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Venue</label>
-                  <input type="text" required value={createForm.venue} onChange={(e) => setCreateForm({ ...createForm, venue: e.target.value })} placeholder="e.g. Main Hall" className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-white focus:border-brand-purple focus:ring-1 focus:ring-brand-purple transition-all outline-none" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Capacity</label>
-                    <input type="number" required min={1} value={createForm.capacity} onChange={(e) => setCreateForm({ ...createForm, capacity: Number(e.target.value) })} className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-white focus:border-brand-purple focus:ring-1 focus:ring-brand-purple transition-all outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Prefix</label>
-                    <input type="text" required maxLength={8} value={createForm.prefix} onChange={(e) => setCreateForm({ ...createForm, prefix: e.target.value.toUpperCase() })} placeholder="EVT" className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-white/10 text-white font-mono uppercase focus:border-brand-purple focus:ring-1 focus:ring-brand-purple transition-all outline-none" />
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3 pt-4 border-t border-white/5 mt-6">
-                  <button type="button" onClick={() => setShowCreateModal(false)} className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-colors">Cancel</button>
-                  <button type="submit" disabled={creatingEvent} className="px-6 py-3 rounded-xl bg-brand-purple hover:bg-brand-purple/90 text-white font-bold transition-colors shadow-lg shadow-brand-purple/25">{creatingEvent ? 'Creating...' : 'Create Event'}</button>
-                </div>
-              </form>
-            </div>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium">Date</span>
+                  <input type="date" required value={createForm.date} onChange={(e) => setCreateForm({ ...createForm, date: e.target.value })} className={field} />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium">Start time</span>
+                  <input type="text" required value={createForm.startTime} onChange={(e) => setCreateForm({ ...createForm, startTime: e.target.value })} placeholder="10:00 AM" className={field} />
+                </label>
+              </div>
+              <label className="block text-sm">
+                <span className="mb-1 block font-medium">Venue</span>
+                <input type="text" required value={createForm.venue} onChange={(e) => setCreateForm({ ...createForm, venue: e.target.value })} placeholder="Main Hall" className={field} />
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium">Capacity</span>
+                  <input type="number" required min={1} value={createForm.capacity} onChange={(e) => setCreateForm({ ...createForm, capacity: Number(e.target.value) })} className={field} />
+                </label>
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium">Ticket prefix</span>
+                  <input type="text" required maxLength={8} value={createForm.prefix} onChange={(e) => setCreateForm({ ...createForm, prefix: e.target.value.toUpperCase() })} placeholder="EVT" className={`${field} font-mono uppercase`} />
+                </label>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-stone-100 pt-4">
+                <button type="button" onClick={() => setShowCreateModal(false)} className={btnSoft}>Cancel</button>
+                <button type="submit" disabled={creatingEvent} className={btnBrand}>{creatingEvent ? 'Saving…' : 'Save event'}</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {/* ── QR Pass Modal ── */}
+      {/* QR */}
       {qrModalAttendee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setQrModalAttendee(null)}>
-          <div className="w-full max-w-sm bg-slate-900 border border-white/10 rounded-[2rem] shadow-2xl p-8 text-center relative animate-[slideUp_0.3s_ease-out]" onClick={(e) => e.stopPropagation()}>
-            <button onClick={() => setQrModalAttendee(null)} className="absolute right-6 top-6 text-slate-400 hover:text-white transition-colors">✕</button>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-purple/10 border border-brand-purple/20 text-brand-purple-hi text-xs font-bold uppercase tracking-widest mb-6"><QrCode size={14} /> Gate Pass</div>
-            <h4 className="text-xl font-display font-bold text-white mb-1">{qrModalAttendee.name}</h4>
-            <p className="text-sm text-slate-400 font-mono mb-6">{qrModalAttendee.email}</p>
-            <div className="bg-white p-4 rounded-2xl inline-block mb-6 shadow-xl">{qrModalUrl ? <img src={qrModalUrl} alt="QR" className="w-48 h-48 block" /> : <div className="w-48 h-48 flex items-center justify-center text-slate-900 font-mono font-bold text-sm">{qrModalAttendee.ticketCode}</div>}</div>
-            <div className="font-mono text-lg font-bold text-brand-purple-hi bg-slate-950 border border-white/10 rounded-xl py-3 mb-6 select-all">{qrModalAttendee.ticketCode}</div>
-            <button onClick={() => setQrModalAttendee(null)} className="w-full py-3.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold transition-colors">Close</button>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-900/50 p-4" onClick={() => setQrModalAttendee(null)}>
+          <div className="w-full max-w-xs rounded-2xl bg-white p-6 text-center shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h4 className="text-lg font-semibold">{qrModalAttendee.name}</h4>
+            <p className="text-sm text-stone-500">{qrModalAttendee.email}</p>
+            <div className="my-5 inline-block rounded-xl border border-stone-200 p-2">
+              {qrModalUrl
+                ? <img src={qrModalUrl} alt="Ticket QR code" className="block h-48 w-48" />
+                : <div className="flex h-48 w-48 items-center justify-center font-mono text-sm">{qrModalAttendee.ticketCode}</div>}
+            </div>
+            <div className="select-all font-mono text-base tracking-wide">{qrModalAttendee.ticketCode}</div>
+            <button onClick={() => setQrModalAttendee(null)} className={`${btnSoft} mt-5 w-full`}>Close</button>
           </div>
         </div>
       )}
-      
-      {/* ── Delete Event Modal ── */}
+
+      {/* Delete */}
       {showDeleteModal && selectedEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => !deletingEvent && setShowDeleteModal(false)}>
-          <div className="w-full max-w-md bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-[slideUp_0.3s_ease-out]" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6 border-b border-white/5 flex items-center justify-between bg-slate-900/50">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400">
-                  <Trash2 size={20} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-display font-bold text-white">Delete Event</h3>
-                  <p className="text-xs text-slate-400">Permanently remove this event</p>
-                </div>
-              </div>
-              <button disabled={deletingEvent} onClick={() => setShowDeleteModal(false)} className="text-slate-400 hover:text-white transition-colors disabled:opacity-40">✕</button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              {deleteError && (
-                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
-                  {deleteError}
-                </div>
-              )}
-
-              <p className="text-sm text-slate-300">
-                Are you sure you want to delete <strong className="text-white font-semibold">"{selectedEvent.name}"</strong>?
-              </p>
-
-              <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 text-xs text-rose-300 space-y-1.5">
-                <div className="font-bold flex items-center gap-1.5 text-rose-400">
-                  <span>Warning: This action cannot be undone.</span>
-                </div>
-                <p className="text-rose-300/80">
-                  Deleting this event will permanently remove all associated attendee records ({registeredCount} registered), tickets, check-in histories, and audit logs.
-                </p>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-white/5">
-                <button
-                  type="button"
-                  disabled={deletingEvent}
-                  onClick={() => setShowDeleteModal(false)}
-                  className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 font-semibold text-xs transition-colors disabled:opacity-40"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={deletingEvent}
-                  onClick={handleDeleteEvent}
-                  className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition-colors shadow-lg shadow-rose-600/30 flex items-center gap-2 disabled:opacity-50"
-                >
-                  {deletingEvent ? (
-                    <>
-                      <RefreshCw size={14} className="animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 size={14} />
-                      Yes, Delete Event
-                    </>
-                  )}
-                </button>
-              </div>
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-900/50 p-4" onClick={() => !deletingEvent && setShowDeleteModal(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold">Delete "{selectedEvent.name}"?</h3>
+            <p className="mt-2 text-sm text-stone-600">
+              This permanently removes the event, its {registered} registered guest{registered === 1 ? '' : 's'}, their tickets and the check-in history. It can't be undone.
+            </p>
+            {deleteError && <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{deleteError}</p>}
+            <div className="mt-6 flex justify-end gap-2">
+              <button disabled={deletingEvent} onClick={() => setShowDeleteModal(false)} className={btnSoft}>Keep it</button>
+              <button disabled={deletingEvent} onClick={handleDeleteEvent} className="inline-flex items-center rounded-xl bg-red-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 disabled:opacity-50">
+                {deletingEvent ? 'Deleting…' : 'Delete event'}
+              </button>
             </div>
           </div>
         </div>
       )}
-
-      {showEventDropdown && <div className="fixed inset-0 z-30" onClick={() => setShowEventDropdown(false)} />}
     </div>
   );
 };

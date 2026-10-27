@@ -3,17 +3,45 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireSuperAdmin = exports.getSuperAdminPasscode = void 0;
+exports.requireSuperAdmin = exports.hasValidSuperAdminToken = exports.isConfiguredSuperAdmin = exports.getSuperAdminEmail = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const authMiddleware_js_1 = require("./authMiddleware.js");
-const getSuperAdminPasscode = () => {
-    return process.env.SUPER_ADMIN_PASSWORD || 'GateKeeper#SuperAdmin2026!';
+const getSuperAdminEmail = () => {
+    const email = process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase();
+    if (!email) {
+        throw new Error('SUPER_ADMIN_EMAIL must be configured.');
+    }
+    return email;
 };
-exports.getSuperAdminPasscode = getSuperAdminPasscode;
+exports.getSuperAdminEmail = getSuperAdminEmail;
+const isConfiguredSuperAdmin = (email) => Boolean(email && email.trim().toLowerCase() === (0, exports.getSuperAdminEmail)());
+exports.isConfiguredSuperAdmin = isConfiguredSuperAdmin;
+const hasValidSuperAdminToken = (req) => {
+    if (!req.organizer || !(0, exports.isConfiguredSuperAdmin)(req.organizer.email))
+        return false;
+    const token = req.headers['x-super-admin-token'] ||
+        (req.cookies && req.cookies.superAdminToken);
+    if (!token)
+        return false;
+    try {
+        const decoded = jsonwebtoken_1.default.verify(token, (0, authMiddleware_js_1.getJwtSecret)());
+        return Boolean(decoded.superAdminAuth &&
+            decoded.id === req.organizer._id.toString() &&
+            (0, exports.isConfiguredSuperAdmin)(decoded.email));
+    }
+    catch {
+        return false;
+    }
+};
+exports.hasValidSuperAdminToken = hasValidSuperAdminToken;
 const requireSuperAdmin = async (req, res, next) => {
     try {
         if (!req.organizer) {
             res.status(401).json({ error: 'Authentication required.' });
+            return;
+        }
+        if (!(0, exports.isConfiguredSuperAdmin)(req.organizer.email)) {
+            res.status(403).json({ error: 'This account is not authorized to access Super Admin.' });
             return;
         }
         // Check for super admin token in header or cookie
@@ -28,10 +56,7 @@ const requireSuperAdmin = async (req, res, next) => {
             });
             return;
         }
-        const decoded = jsonwebtoken_1.default.verify(token, (0, authMiddleware_js_1.getJwtSecret)());
-        if (!decoded ||
-            !decoded.superAdminAuth ||
-            decoded.id !== req.organizer._id.toString()) {
+        if (!(0, exports.hasValidSuperAdminToken)(req)) {
             res.status(403).json({
                 error: 'Invalid or expired Super Admin session. Please re-enter your Super Admin Passcode.',
                 requiresPasscode: true,
@@ -43,7 +68,7 @@ const requireSuperAdmin = async (req, res, next) => {
     }
     catch (err) {
         res.status(403).json({
-            error: 'Super Admin authorization expired or invalid. Please re-enter your passcode.',
+            error: 'Super Admin authorization expired or invalid. Please request a new OTP.',
             requiresPasscode: true,
         });
         return;

@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.errorHandler = void 0;
 const errorHandler = (err, _req, res, _next) => {
     console.error('[Unhandled Error]', err);
-    // Mongoose validation error
     if (err.name === 'ValidationError') {
         res.status(400).json({
             error: 'Validation Error',
@@ -11,16 +10,15 @@ const errorHandler = (err, _req, res, _next) => {
         });
         return;
     }
-    // Mongoose CastError — e.g. invalid ObjectId format in a URL param
     if (err.name === 'CastError') {
         res.status(400).json({
             error: `Invalid value for field '${err.path}': ${err.value}`,
         });
         return;
     }
-    // MongoDB duplicate key
-    if (err.code === 11000) {
-        const field = Object.keys(err.keyValue || {})[0] || 'field';
+    // Database uniqueness violation
+    if (err.code === '23505' || err.code === 11000) {
+        const field = err.detail?.match(/\(([^)]+)\)/)?.[1] || Object.keys(err.keyValue || {})[0] || 'field';
         res.status(409).json({
             error: `A record with this ${field} already exists.`,
         });

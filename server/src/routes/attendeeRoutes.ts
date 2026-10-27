@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import mongoose from 'mongoose';
+import { isValidId } from '../config/ids.js';
 import { z } from 'zod';
 import { Event } from '../models/Event.js';
 import { Attendee } from '../models/Attendee.js';
@@ -26,7 +26,7 @@ router.post('/', publicRegisterLimiter, async (req: Request, res: Response): Pro
     const validated = publicRegisterSchema.parse(req.body);
     const normalizedEmail = validated.email.toLowerCase().trim();
 
-    if (!mongoose.Types.ObjectId.isValid(validated.eventId)) {
+    if (!isValidId(validated.eventId)) {
       res.status(400).json({ error: 'Invalid event identifier.' });
       return;
     }
@@ -195,7 +195,7 @@ router.post('/public-lookup', publicLookupLimiter, async (req: Request, res: Res
     const cleanEmail = (email || '').trim().toLowerCase();
     const cleanCode = (ticketCode || '').trim().toUpperCase();
 
-    if (!eventId || !mongoose.Types.ObjectId.isValid(eventId)) {
+    if (!eventId || !isValidId(eventId)) {
       res.status(400).json({ error: 'A valid event ID is required.' });
       return;
     }
@@ -498,7 +498,7 @@ router.post('/checkin-code', authMiddleware, requireEventOwnership, async (req: 
 router.patch('/:id/checkin', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const rawId = req.params.id;
-    if (!mongoose.Types.ObjectId.isValid(rawId)) {
+    if (!isValidId(rawId)) {
       res.status(400).json({ error: 'Invalid attendee ID.' });
       return;
     }
@@ -579,7 +579,7 @@ router.patch('/:id/checkin', authMiddleware, async (req: AuthenticatedRequest, r
 router.patch('/:id/undo-checkin', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const rawId = req.params.id;
-    if (!mongoose.Types.ObjectId.isValid(rawId)) {
+    if (!isValidId(rawId)) {
       res.status(400).json({ error: 'Invalid attendee ID.' });
       return;
     }
@@ -636,7 +636,7 @@ router.patch('/:id/undo-checkin', authMiddleware, async (req: AuthenticatedReque
 router.post('/:id/resend-ticket', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const rawId = req.params.id;
-    if (!mongoose.Types.ObjectId.isValid(rawId)) {
+    if (!isValidId(rawId)) {
       res.status(400).json({ error: 'Invalid attendee ID.' });
       return;
     }

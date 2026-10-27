@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireEventOwnership = void 0;
 const Event_js_1 = require("../models/Event.js");
+const superAdminMiddleware_js_1 = require("./superAdminMiddleware.js");
 const requireEventOwnership = async (req, res, next) => {
     try {
         if (!req.organizer) {
@@ -17,9 +18,7 @@ const requireEventOwnership = async (req, res, next) => {
             return;
         }
         const organizerIdStr = req.organizer._id ? req.organizer._id.toString() : '';
-        const isSuperAdmin = req.organizer.role === 'superadmin' ||
-            !!req.headers['x-super-admin-token'] ||
-            !!(req.cookies && req.cookies.superAdminToken);
+        const isSuperAdmin = (0, superAdminMiddleware_js_1.hasValidSuperAdminToken)(req);
         const query = { _id: rawEventId };
         if (!isSuperAdmin) {
             query.organizerId = organizerIdStr;

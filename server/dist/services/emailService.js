@@ -4,7 +4,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.sendOtpEmail = exports.sendTicketEmail = void 0;
-const resend_1 = require("resend");
 const nodemailer_1 = __importDefault(require("nodemailer"));
 let transporter = null;
 const escapeHtml = (value) => value
@@ -13,60 +12,38 @@ const escapeHtml = (value) => value
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
-const getResendClient = () => {
-    const key = process.env.RESEND_API_KEY?.trim();
-    if (!key || key.startsWith('your_') || key.startsWith('replace_')) {
-        return null;
-    }
-    return new resend_1.Resend(key);
-};
 const getFromEmail = (name = 'GateKeeper') => {
-    if (process.env.RESEND_FROM_EMAIL) {
-        return process.env.RESEND_FROM_EMAIL;
+    const smtpUser = process.env.SMTP_USER?.trim();
+    if (!smtpUser) {
+        throw new Error('SMTP_USER must be configured for email delivery.');
     }
-    if (process.env.EMAIL_FROM) {
-        return process.env.EMAIL_FROM;
-    }
-    return `"${name}" <onboarding@resend.dev>`;
+    return `"${name}" <${smtpUser}>`;
 };
-// Fallback nodemailer transporter (for offline dev or before API key is provided)
-const getFallbackTransporter = async () => {
+const getSmtpTransporter = () => {
     if (transporter)
         return transporter;
-    const emailUser = process.env.EMAIL_USER;
-    const emailPass = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
-    if (emailUser && emailPass) {
-        transporter = nodemailer_1.default.createTransport({
-            service: process.env.EMAIL_SERVICE || 'gmail',
-            auth: {
-                user: emailUser,
-                pass: emailPass,
-            },
-        });
-        return transporter;
+    const emailUser = process.env.SMTP_USER?.trim();
+    const emailPass = process.env.SMTP_PASS?.trim();
+    const smtpHost = process.env.SMTP_HOST?.trim() || 'smtp.gmail.com';
+    const smtpPort = Number(process.env.SMTP_PORT || 587);
+    const smtpSecure = process.env.SMTP_SECURE === 'true' || smtpPort === 465;
+    if (!emailUser || !emailPass) {
+        throw new Error('SMTP_USER and SMTP_PASS must be configured for email delivery.');
     }
-    try {
-        const testAccount = await nodemailer_1.default.createTestAccount();
-        transporter = nodemailer_1.default.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false,
-            auth: {
-                user: testAccount.user,
-                pass: testAccount.pass,
-            },
-        });
-        console.log(`[Email Dev] Configured Ethereal Email test fallback: ${testAccount.user}`);
-        return transporter;
+    if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
+        throw new Error('SMTP_PORT must be a valid TCP port.');
     }
-    catch (err) {
-        transporter = nodemailer_1.default.createTransport({
-            streamTransport: true,
-            newline: 'windows',
-            buffer: true,
-        });
-        return transporter;
-    }
+    transporter = nodemailer_1.default.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        requireTLS: !smtpSecure,
+        connectionTimeout: 15_000,
+        greetingTimeout: 30_000,
+        socketTimeout: 60_000,
+        auth: { user: emailUser, pass: emailPass },
+    });
+    return transporter;
 };
 const sendTicketEmail = async (params) => {
     try {
@@ -190,37 +167,16 @@ const sendTicketEmail = async (params) => {
                 content: graphicBuffer,
             });
         }
-        const resend = getResendClient();
-        if (resend) {
-            const { data, error } = await resend.emails.send({
-                from: getFromEmail('GateKeeper Events'),
-                to: [params.toEmail],
-                subject: `Your Ticket for ${params.eventName} (${params.ticketCode})`,
-                html: htmlContent,
-                attachments: emailAttachments,
-            });
-            if (error) {
-                console.error(`[Resend Ticket Error] to ${params.toEmail}:`, error.message);
-                return { success: false, error: error.message };
-            }
-            console.log(`[Resend Ticket Sent] Message ID: ${data?.id} to ${params.toEmail}`);
-            return { success: true };
-        }
-        // Nodemailer / Ethereal fallback when RESEND_API_KEY is not yet supplied
-        console.warn(`[Email Notice] RESEND_API_KEY not configured. Sending ticket to ${params.toEmail} via fallback...`);
-        const transport = await getFallbackTransporter();
+        const transport = getSmtpTransporter();
         const info = await transport.sendMail({
             from: getFromEmail('GateKeeper Events'),
             to: params.toEmail,
-            subject: `Your Ticket for ${params.eventName} (${params.ticketCode})`,
+            subject: `Your ticket for ${params.eventName} (${params.ticketCode})`,
             html: htmlContent,
             attachments: emailAttachments,
         });
-        const previewUrl = nodemailer_1.default.getTestMessageUrl(info) || undefined;
-        if (previewUrl) {
-            console.log(`[Fallback Email] Ticket preview: ${previewUrl}`);
-        }
-        return { success: true, previewUrl };
+        console.log(`[Nodemailer Ticket Sent] Message ID: ${info.messageId} to ${params.toEmail}`);
+        return { success: true };
     }
     catch (err) {
         console.error(`[Email Error] Failed to send ticket email to ${params.toEmail}:`, err?.message || err);
@@ -231,6 +187,7 @@ exports.sendTicketEmail = sendTicketEmail;
 const sendOtpEmail = async (toEmail, otp, purpose = 'login') => {
     try {
         const isPasswordReset = purpose === 'password-reset';
+        const isRegistration = purpose === 'registration';
         const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -256,11 +213,11 @@ const sendOtpEmail = async (toEmail, otp, purpose = 'login') => {
         <div class="card">
           <div class="header">
             <div class="logo-badge">⚡ GateKeeper Auth</div>
-            <h1>${isPasswordReset ? 'Password Reset Code' : 'Email Authentication Code'}</h1>
-            <p>${isPasswordReset ? 'Use this one-time code to reset your GateKeeper password' : 'Your one-time passcode for secure passwordless sign-in'}</p>
+            <h1>${isPasswordReset ? 'Password Reset Code' : isRegistration ? 'Complete Your Registration' : 'Email Authentication Code'}</h1>
+            <p>${isPasswordReset ? 'Use this one-time code to reset your GateKeeper password' : isRegistration ? 'Use this one-time code to create your GateKeeper organizer account' : 'Your one-time passcode for secure passwordless sign-in'}</p>
           </div>
           <div class="content">
-            <p class="note">${isPasswordReset ? 'Enter this 6-digit code to choose a new password:' : 'Enter this 6-digit verification code to access your command center:'}</p>
+            <p class="note">${isPasswordReset ? 'Enter this 6-digit code to choose a new password:' : isRegistration ? 'Enter this 6-digit code to complete your organizer registration:' : 'Enter this 6-digit verification code to access your command center:'}</p>
             
             <div class="otp-container">
               <div class="otp-label">One-Time Passcode (OTP)</div>
@@ -280,35 +237,15 @@ const sendOtpEmail = async (toEmail, otp, purpose = 'login') => {
       </body>
       </html>
     `;
-        const resend = getResendClient();
-        if (resend) {
-            const { data, error } = await resend.emails.send({
-                from: getFromEmail('GateKeeper Auth'),
-                to: [toEmail],
-                subject: isPasswordReset ? `Your Password Reset Code - GateKeeper` : `Your Login Code: ${otp} - GateKeeper Authentication`,
-                html: htmlContent,
-            });
-            if (error) {
-                console.error(`[Resend OTP Error] to ${toEmail}:`, error.message);
-                return { success: false, error: error.message };
-            }
-            console.log(`[Resend OTP Sent] Message ID: ${data?.id} to ${toEmail}`);
-            return { success: true };
-        }
-        // Fallback if no key configured
-        console.warn(`[Email Notice] RESEND_API_KEY not configured. Sending OTP to ${toEmail} via fallback...`);
-        const transport = await getFallbackTransporter();
+        const transport = getSmtpTransporter();
         const info = await transport.sendMail({
             from: getFromEmail('GateKeeper Auth'),
             to: toEmail,
-            subject: isPasswordReset ? `Your Password Reset Code - GateKeeper` : `Your Login Code: ${otp} - GateKeeper Authentication`,
+            subject: isPasswordReset ? `Your Password Reset Code - GateKeeper` : isRegistration ? `Complete Your GateKeeper Registration` : `Your Login Code: ${otp} - GateKeeper Authentication`,
             html: htmlContent,
         });
-        const previewUrl = nodemailer_1.default.getTestMessageUrl(info) || undefined;
-        if (previewUrl) {
-            console.log(`[Fallback OTP] Preview: ${previewUrl}`);
-        }
-        return { success: true, previewUrl };
+        console.log(`[Nodemailer OTP Sent] Message ID: ${info.messageId} to ${toEmail}`);
+        return { success: true };
     }
     catch (err) {
         console.error(`[Email OTP Error] Failed to send OTP to ${toEmail}:`, err?.message || err);

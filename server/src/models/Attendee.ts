@@ -1,9 +1,9 @@
-import mongoose, { Schema, Document } from 'mongoose';
-import { isUsingMemoryStore } from '../config/db.js';
-import { memoryStore } from '../config/memoryDb.js';
+import { createCollection } from './supabaseModel.js';
+import { supabase } from '../config/supabase.js';
 
-export interface IAttendeeDocument extends Document {
-  eventId: any;
+export interface IAttendeeDocument {
+  _id: string;
+  eventId: string;
   name: string;
   email: string;
   ticketType: string;
@@ -17,45 +17,40 @@ export interface IAttendeeDocument extends Document {
   offlineScanIds: string[];
   createdAt: Date;
   updatedAt: Date;
+  save: () => Promise<IAttendeeDocument>;
 }
 
-const AttendeeSchema = new Schema<IAttendeeDocument>(
-  {
-    eventId: { type: Schema.Types.ObjectId, ref: 'Event', required: true, index: true },
-    name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, lowercase: true, trim: true },
-    ticketType: { type: String, default: 'General', trim: true },
-    ticketCode: { type: String, required: true, trim: true },
-    qrToken: { type: String, required: true, trim: true, index: true },
-    registeredAt: { type: Date, default: Date.now },
-    checkedInAt: { type: Date, default: null },
-    checkedInBy: { type: String, default: null },
-    emailSent: { type: Boolean, default: false },
-    emailLastAttemptAt: { type: Date, default: null },
-    offlineScanIds: { type: [String], default: [] },
-  },
-  { timestamps: true }
-);
-
-AttendeeSchema.index({ eventId: 1, email: 1 }, { unique: true });
-AttendeeSchema.index({ eventId: 1, ticketCode: 1 }, { unique: true });
-AttendeeSchema.index({ eventId: 1, checkedInAt: 1 });
-AttendeeSchema.index({ eventId: 1, qrToken: 1 });
-
-const MongooseAttendee = mongoose.model<IAttendeeDocument>('Attendee', AttendeeSchema);
+const collection: any = createCollection('attendees', {
+  _id: 'id',
+  eventId: 'event_id',
+  ticketType: 'ticket_type',
+  ticketCode: 'ticket_code',
+  qrToken: 'qr_token',
+  registeredAt: 'registered_at',
+  checkedInAt: 'checked_in_at',
+  checkedInBy: 'checked_in_by',
+  emailSent: 'email_sent',
+  emailLastAttemptAt: 'email_last_attempt_at',
+  offlineScanIds: 'offline_scan_ids',
+  createdAt: 'created_at',
+  updatedAt: 'updated_at',
+});
 
 export const Attendee: any = {
-  findOne: (query: any) => (isUsingMemoryStore ? memoryStore.attendees.findOne(query) : MongooseAttendee.findOne(query)),
-  findOneAndUpdate: (query: any, update: any) => (
-    isUsingMemoryStore
-      ? memoryStore.attendees.findOneAndUpdate(query, update)
-      : MongooseAttendee.findOneAndUpdate(query, update, { new: true })
-  ),
-  findById: (id: any) => (isUsingMemoryStore ? memoryStore.attendees.findById(id) : MongooseAttendee.findById(id)),
-  create: (data: any) => (isUsingMemoryStore ? memoryStore.attendees.create(data) : MongooseAttendee.create(data)),
-  find: (query: any = {}) => (isUsingMemoryStore ? memoryStore.attendees.find(query) : MongooseAttendee.find(query)),
-  countDocuments: (query: any = {}) => (isUsingMemoryStore ? memoryStore.attendees.countDocuments(query) : MongooseAttendee.countDocuments(query)),
-  aggregate: (pipeline: any[]) => (isUsingMemoryStore ? memoryStore.attendees.aggregate(pipeline) : MongooseAttendee.aggregate(pipeline)),
-  deleteMany: (query: any = {}) => (isUsingMemoryStore ? memoryStore.attendees.deleteMany(query) : MongooseAttendee.deleteMany(query)),
-  findByIdAndDelete: (id: any) => (isUsingMemoryStore ? memoryStore.attendees.findByIdAndDelete(id) : MongooseAttendee.findByIdAndDelete(id)),
+  ...collection,
+  findOneAndUpdate: async (query: any, update: any) => {
+    if (update?.$set?.checkedInAt && update?.$addToSet?.offlineScanIds && query?._id) {
+      const { data, error } = await supabase.rpc('claim_attendee_checkin', {
+        p_attendee_id: query._id.toString(),
+        p_checked_in_at: update.$set.checkedInAt,
+        p_checked_in_by: update.$set.checkedInBy || null,
+        p_scan_id: update.$addToSet.offlineScanIds,
+      });
+      if (error) throw error;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row) return null;
+      return collection.findById(row.id);
+    }
+    return collection.findOneAndUpdate(query, update);
+  },
 };

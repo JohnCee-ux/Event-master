@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { Organizer } from '../models/Organizer.js';
@@ -9,83 +10,119 @@ import { authMiddleware, AuthenticatedRequest, getJwtSecret } from '../middlewar
 import {
   requireSuperAdmin,
   SuperAdminRequest,
-  getSuperAdminPasscode,
+  isConfiguredSuperAdmin,
 } from '../middleware/superAdminMiddleware.js';
-import { isUsingMemoryStore } from '../config/db.js';
-import { memoryStore } from '../config/memoryDb.js';
+import { authLimiter } from '../middleware/rateLimiter.js';
+import { sendOtpEmail } from '../services/emailService.js';
+import { consumeOtpRequest } from '../services/otpRateLimiter.js';
 
 const router = Router();
 
-const passcodeSchema = z.object({
-  passcode: z.string().min(1, 'Passcode is required'),
-});
+const otpSchema = z.object({ otp: z.string().length(6, 'OTP must be 6 digits') });
+const superAdminOtpStore = new Map<string, { otp: string; expiresAt: number; attempts: number }>();
 
-// ── 1. Verify Super Admin Master Passcode ──────────────────────────────────────
+const issueSuperAdminToken = (req: AuthenticatedRequest, res: Response): void => {
+  const organizer = req.organizer!;
+  const superAdminToken = jwt.sign(
+    {
+      id: organizer._id.toString(),
+      email: organizer.email,
+      role: 'superadmin',
+      superAdminAuth: true,
+    },
+    getJwtSecret(),
+    { expiresIn: '4h' }
+  );
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.cookie('superAdminToken', superAdminToken, {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'strict' : 'lax',
+    maxAge: 4 * 60 * 60 * 1000,
+  });
+  res.json({ success: true, message: 'Super Admin access granted.', token: superAdminToken, expiresIn: '4h' });
+};
+
+// ── 1. Send Super Admin OTP ───────────────────────────────────────────────────
 router.post(
-  '/verify-passcode',
+  '/request-otp',
+  authLimiter,
   authMiddleware,
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const validated = passcodeSchema.parse(req.body);
-      const configuredPasscode = getSuperAdminPasscode();
-
-      if (validated.passcode.trim() !== configuredPasscode.trim()) {
-        res.status(401).json({
-          success: false,
-          error: 'Invalid Super Admin passcode. Access denied.',
-        });
+      if (!isConfiguredSuperAdmin(req.organizer?.email)) {
+        res.status(403).json({ success: false, error: 'This account is not authorized to access Super Admin.' });
         return;
       }
-
-      const organizer = req.organizer!;
-
-      // Automatically upgrade or mark role as superadmin if needed
-      if (organizer.role !== 'superadmin') {
-        organizer.role = 'superadmin';
-        if (typeof organizer.save === 'function') {
-          await organizer.save();
-        }
+      const email = process.env.SUPER_ADMIN_EMAIL!.trim().toLowerCase();
+      const quota = consumeOtpRequest(email);
+      if (!quota.allowed) {
+        res.status(429).json({ error: `Too many OTP requests. Try again in ${Math.ceil(quota.retryAfterSeconds / 60)} minutes.` });
+        return;
       }
-
-      // Generate a dedicated, scoped Super Admin Token valid for 4 hours
-      const superAdminToken = jwt.sign(
-        {
-          id: organizer._id.toString(),
-          email: organizer.email,
-          role: 'superadmin',
-          superAdminAuth: true,
-        },
-        getJwtSecret(),
-        { expiresIn: '4h' }
-      );
-
-      // Set cookie as well for convenience
-      const isProduction = process.env.NODE_ENV === 'production';
-      res.cookie('superAdminToken', superAdminToken, {
-        httpOnly: true,
-        secure: isProduction,
-        sameSite: isProduction ? 'strict' : 'lax',
-        maxAge: 4 * 60 * 60 * 1000,
-      });
-
-      res.json({
-        success: true,
-        message: 'Super Admin access granted.',
-        token: superAdminToken,
-        expiresIn: '4h',
-      });
+      const existing = superAdminOtpStore.get(email);
+      if (existing && existing.expiresAt - Date.now() > 8.5 * 60 * 1000) {
+        res.status(429).json({ error: 'Please wait before requesting another code.' });
+        return;
+      }
+      const otp = crypto.randomInt(100000, 1000000).toString();
+      superAdminOtpStore.set(email, { otp, expiresAt: Date.now() + 10 * 60 * 1000, attempts: 0 });
+      const result = await sendOtpEmail(email, otp);
+      if (!result.success) {
+        superAdminOtpStore.delete(email);
+        res.status(502).json({ error: 'Unable to send the Super Admin OTP.' });
+        return;
+      }
+      res.json({ success: true, message: `A verification code was sent to ${email}.` });
     } catch (err: any) {
-      if (err instanceof z.ZodError) {
-        res.status(400).json({ error: err.errors[0].message });
-        return;
-      }
-      console.error('Verify passcode error:', err);
-      res.status(500).json({ error: 'Failed to verify super admin passcode.' });
+      console.error('Request Super Admin OTP error:', err);
+      res.status(500).json({ error: 'Failed to send Super Admin OTP.' });
     }
   }
 );
 
-// ── 2. Check Super Admin Status / Session ──────────────────────────────────────
+// ── 2. Verify Super Admin OTP ─────────────────────────────────────────────────
+router.post('/verify-otp', authLimiter, authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!isConfiguredSuperAdmin(req.organizer?.email)) {
+      res.status(403).json({ success: false, error: 'This account is not authorized to access Super Admin.' });
+      return;
+    }
+    const { otp } = otpSchema.parse(req.body);
+    const email = process.env.SUPER_ADMIN_EMAIL!.trim().toLowerCase();
+    const record = superAdminOtpStore.get(email);
+    if (!record) {
+      res.status(400).json({ error: 'No active OTP found. Request a new code.' });
+      return;
+    }
+    if (Date.now() > record.expiresAt) {
+      superAdminOtpStore.delete(email);
+      res.status(400).json({ error: 'OTP expired. Request a new code.' });
+      return;
+    }
+    if (record.attempts >= 5) {
+      superAdminOtpStore.delete(email);
+      res.status(429).json({ error: 'Too many incorrect attempts. Request a new code.' });
+      return;
+    }
+    if (record.otp !== otp.trim()) {
+      record.attempts += 1;
+      res.status(400).json({ error: 'Invalid Super Admin OTP.' });
+      return;
+    }
+    superAdminOtpStore.delete(email);
+    issueSuperAdminToken(req, res);
+  } catch (err: any) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: err.errors[0].message });
+      return;
+    }
+    console.error('Verify Super Admin OTP error:', err);
+    res.status(500).json({ error: 'Failed to verify Super Admin OTP.' });
+  }
+});
+
+// ── 3. Check Super Admin Status / Session ──────────────────────────────────────
 router.get(
   '/status',
   authMiddleware,
@@ -95,7 +132,7 @@ router.get(
       (req.cookies && req.cookies.superAdminToken);
 
     if (!token) {
-      res.json({ unlocked: false, isSuperAdmin: req.organizer?.role === 'superadmin' });
+      res.json({ unlocked: false, isSuperAdmin: isConfiguredSuperAdmin(req.organizer?.email) });
       return;
     }
 
@@ -104,25 +141,33 @@ router.get(
       if (
         decoded &&
         decoded.superAdminAuth &&
-        decoded.id === req.organizer!._id.toString()
+        decoded.id === req.organizer!._id.toString() &&
+        isConfiguredSuperAdmin(req.organizer?.email) &&
+        isConfiguredSuperAdmin(decoded.email)
       ) {
         res.json({ unlocked: true, isSuperAdmin: true, expiresAt: decoded.exp });
         return;
       }
-      res.json({ unlocked: false, isSuperAdmin: req.organizer?.role === 'superadmin' });
+      res.json({ unlocked: false, isSuperAdmin: isConfiguredSuperAdmin(req.organizer?.email) });
     } catch {
-      res.json({ unlocked: false, isSuperAdmin: req.organizer?.role === 'superadmin' });
+      res.json({ unlocked: false, isSuperAdmin: isConfiguredSuperAdmin(req.organizer?.email) });
     }
   }
 );
 
 // ── 3. Lock Super Admin Session ───────────────────────────────────────────────
 router.post('/lock', (_req: Request, res: Response): void => {
-  res.clearCookie('superAdminToken');
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.clearCookie('superAdminToken', {
+    httpOnly: true,
+    secure: isProduction,
+    sameSite: isProduction ? 'strict' : 'lax',
+    path: '/',
+  });
   res.json({ success: true, message: 'Super admin session locked.' });
 });
 
-// All following routes require BOTH standard auth AND verified Super Admin passcode
+// All following routes require BOTH standard auth AND verified Super Admin OTP
 router.use(authMiddleware as any);
 router.use(requireSuperAdmin as any);
 
@@ -166,7 +211,7 @@ router.get('/overview', async (_req: SuperAdminRequest, res: Response): Promise<
         totalCheckedIn: checkedInCount,
         overallCheckInRate: checkInRate,
         eventsByStatus,
-        storageEngine: isUsingMemoryStore ? 'High-Speed In-Memory Store' : 'MongoDB Atlas Cluster',
+        storageEngine: 'Supabase PostgreSQL',
       },
       recentSignups: organizersList.slice(0, 6).map((o: any) => ({
         id: o._id.toString(),

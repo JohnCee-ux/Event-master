@@ -1,10 +1,7 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const mongoose_1 = __importDefault(require("mongoose"));
+const ids_js_1 = require("../config/ids.js");
 const zod_1 = require("zod");
 const Event_js_1 = require("../models/Event.js");
 const Attendee_js_1 = require("../models/Attendee.js");
@@ -27,7 +24,7 @@ router.post('/', rateLimiter_js_1.publicRegisterLimiter, async (req, res) => {
     try {
         const validated = publicRegisterSchema.parse(req.body);
         const normalizedEmail = validated.email.toLowerCase().trim();
-        if (!mongoose_1.default.Types.ObjectId.isValid(validated.eventId)) {
+        if (!(0, ids_js_1.isValidId)(validated.eventId)) {
             res.status(400).json({ error: 'Invalid event identifier.' });
             return;
         }
@@ -180,7 +177,7 @@ router.post('/public-lookup', rateLimiter_js_1.publicLookupLimiter, async (req, 
         const { email, ticketCode, eventId } = req.body;
         const cleanEmail = (email || '').trim().toLowerCase();
         const cleanCode = (ticketCode || '').trim().toUpperCase();
-        if (!eventId || !mongoose_1.default.Types.ObjectId.isValid(eventId)) {
+        if (!eventId || !(0, ids_js_1.isValidId)(eventId)) {
             res.status(400).json({ error: 'A valid event ID is required.' });
             return;
         }
@@ -455,7 +452,7 @@ router.post('/checkin-code', authMiddleware_js_1.authMiddleware, ownershipMiddle
 router.patch('/:id/checkin', authMiddleware_js_1.authMiddleware, async (req, res) => {
     try {
         const rawId = req.params.id;
-        if (!mongoose_1.default.Types.ObjectId.isValid(rawId)) {
+        if (!(0, ids_js_1.isValidId)(rawId)) {
             res.status(400).json({ error: 'Invalid attendee ID.' });
             return;
         }
@@ -525,7 +522,7 @@ router.patch('/:id/checkin', authMiddleware_js_1.authMiddleware, async (req, res
 router.patch('/:id/undo-checkin', authMiddleware_js_1.authMiddleware, async (req, res) => {
     try {
         const rawId = req.params.id;
-        if (!mongoose_1.default.Types.ObjectId.isValid(rawId)) {
+        if (!(0, ids_js_1.isValidId)(rawId)) {
             res.status(400).json({ error: 'Invalid attendee ID.' });
             return;
         }
@@ -577,7 +574,7 @@ router.patch('/:id/undo-checkin', authMiddleware_js_1.authMiddleware, async (req
 router.post('/:id/resend-ticket', authMiddleware_js_1.authMiddleware, async (req, res) => {
     try {
         const rawId = req.params.id;
-        if (!mongoose_1.default.Types.ObjectId.isValid(rawId)) {
+        if (!(0, ids_js_1.isValidId)(rawId)) {
             res.status(400).json({ error: 'Invalid attendee ID.' });
             return;
         }

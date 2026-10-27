@@ -8,40 +8,40 @@ export default {
     extend: {
       colors: {
         /* ── Base backgrounds ── */
-        bg:      '#060918',
+        bg:      'var(--c-bg)',
         surface: {
-          DEFAULT: '#0a0e24',
-          subtle: '#10142e',
-          card: '#191d3a',
-          2:       '#10142e',
-          3:       '#191d3a',
-          border:  'rgba(255,255,255,0.06)',
-          'border-hi': 'rgba(255,255,255,0.14)',
-          'border-bright': 'rgba(255,255,255,0.18)',
+          DEFAULT: 'var(--c-surface)',
+          subtle: 'var(--c-surface-2)',
+          card: 'var(--c-surface-3)',
+          2:       'var(--c-surface-2)',
+          3:       'var(--c-surface-3)',
+          border:  'var(--c-border)',
+          'border-hi': 'var(--c-border-hi)',
+          'border-bright': 'var(--c-border-hi)',
         },
 
-        /* ── Primary — Electric Blue (brand accent) ── */
+        /* ── Primary — shared Purple/Indigo brand ── */
         coral: {
-          DEFAULT: '#3861fb',
-          hi:      '#818cf8',
-          soft:    'rgba(56,97,251,0.12)',
-          glow:    'rgba(56,97,251,0.22)',
+          DEFAULT: 'var(--c-coral)',
+          hi:      'var(--c-coral-hi)',
+          soft:    'var(--c-coral-soft)',
+          glow:    'var(--c-coral-glow)',
         },
 
         /* ── Purple/Indigo (UI accent / interactive elements) ── */
         purple: {
-          DEFAULT: '#6366f1',
-          hi:      '#a5b4fc',
-          soft:    'rgba(99,102,241,0.14)',
-          glow:    'rgba(99,102,241,0.26)',
+          DEFAULT: 'var(--c-purple)',
+          hi:      'var(--c-purple-hi)',
+          soft:    'var(--c-purple-soft)',
+          glow:    'var(--c-purple-glow)',
         },
 
         /* Legacy alias */
         primary: {
-          DEFAULT: '#3861fb',
-          hi:      '#818cf8',
-          soft:    'rgba(56,97,251,0.12)',
-          glow:    'rgba(56,97,251,0.22)',
+          DEFAULT: 'var(--c-coral)',
+          hi:      'var(--c-coral-hi)',
+          soft:    'var(--c-coral-soft)',
+          glow:    'var(--c-coral-glow)',
         },
 
         /* ── Success — Emerald ── */
@@ -67,18 +67,18 @@ export default {
 
         /* ── Neutral text ── */
         ink: {
-          DEFAULT: '#e2e8f0',
-          2:       '#94a3b8',
-          3:       '#64748b',
+          DEFAULT: 'var(--c-text)',
+          2:       'var(--c-text-2)',
+          3:       'var(--c-text-3)',
         },
 
         /* ── Legacy aliases ── */
-        background:    '#060918',
-        'brand-coral': '#3861fb',
-        'brand-blue':  '#06b6d4',
-        'brand-cyan':  '#67e8f9',
-        'brand-purple':'#818cf8',
-        'brand-pink':  '#f472b6',
+        background:    'var(--c-bg)',
+        'brand-coral': 'var(--c-coral)',
+        'brand-blue':  'var(--c-coral)',
+        'brand-cyan':  'var(--c-purple-hi)',
+        'brand-purple':'var(--c-purple-hi)',
+        'brand-pink':  'var(--c-purple-hi)',
         'signal-yellow': '#fbbf24',
         'signal-green':'#059669',
         'signal-amber':'#f59e0b',
@@ -92,7 +92,7 @@ export default {
       },
 
       boxShadow: {
-        'glow-coral':  '0 0 24px -4px rgba(56,97,251,0.3)',
+        'glow-coral':  '0 0 24px -4px rgba(124,58,237,0.3)',
         'glow-purple': '0 0 24px -4px rgba(99,102,241,0.3)',
         'glow-violet': '0 0 24px -4px rgba(99,102,241,0.3)',
         'glow-green':  '0 0 20px -5px rgba(16,185,129,0.28)',

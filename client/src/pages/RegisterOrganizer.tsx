@@ -6,6 +6,7 @@ import {
   EyeOffIcon,
   ArrowRightIcon,
 } from '../components/icons/CustomIcons.js';
+import { BrandLogo } from '../components/BrandLogo.js';
 
 interface RegisterOrganizerProps {
   onNavigateToLogin: () => void;
@@ -16,16 +17,19 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({
   onNavigateToLogin,
   onNavigateToPublicRegister,
 }) => {
-  const { register } = useAuth();
+  const { requestRegistrationOtp, verifyRegistrationOtp } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [agreedTerms, setAgreedTerms] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ name?: string; email?: string; password?: string }>({});
   const [loading, setLoading] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,12 +46,28 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({
       return;
     }
     setError(null);
+    setNotice(null);
     setLoading(true);
 
     try {
-      await register({ name, email, password });
+      if (!otpSent) {
+        await requestRegistrationOtp({ name: name.trim(), email: email.trim(), password });
+        setOtpSent(true);
+        setNotice('A verification code was sent to your email.');
+      } else {
+        if (!/^\d{6}$/.test(otp)) {
+          setError('Enter the 6-digit verification code sent to your email.');
+          return;
+        }
+        await verifyRegistrationOtp(email.trim(), otp);
+      }
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Please try again.');
+      if (err.message?.includes('already exists')) {
+        setError('An account already exists for this email. Redirecting you to login…');
+        setTimeout(onNavigateToLogin, 1200);
+      } else {
+        setError(err.message || 'Registration failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -57,12 +77,12 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({
     <div className="register-auth-page">
       <style>{`
         .register-auth-page {
-          --bg: #060918;
-          --card: rgba(10, 14, 36, .92);
-          --border: rgba(255, 255, 255, .1);
-          --text: #f8fafc;
-          --muted: #94a3b8;
-          --primary: #3861fb;
+          --bg: var(--c-bg);
+          --card: color-mix(in srgb, var(--c-surface) 92%, transparent);
+          --border: var(--c-border-hi);
+          --text: var(--c-text);
+          --muted: var(--c-text-2);
+          --primary: var(--c-coral);
           --primary-contrast: #ffffff;
           min-height: 100vh;
           display: flex;
@@ -70,8 +90,8 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({
           justify-content: center;
           padding: 24px 16px;
           background:
-            radial-gradient(ellipse 80% 60% at 50% 0%, rgba(56, 97, 251, .16), transparent 70%),
-            linear-gradient(135deg, #060918 0%, #0a0e24 100%);
+          radial-gradient(ellipse 80% 60% at 50% 0%, var(--c-coral-glow), transparent 70%),
+            linear-gradient(135deg, var(--c-bg) 0%, var(--c-surface) 100%);
           color: var(--text);
           font-family: 'Inter', sans-serif;
         }
@@ -83,7 +103,7 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({
           background: var(--card);
           border: 1px solid var(--border);
           border-radius: 24px;
-          box-shadow: 0 24px 70px rgba(0,0,0,.45), 0 0 45px rgba(56,97,251,.08);
+          box-shadow: 0 24px 70px rgba(0,0,0,.45), 0 0 45px var(--c-coral-soft);
         }
         .register-auth-card::before {
           content: '';
@@ -107,11 +127,11 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({
           padding: 0 14px;
           transition: border-color .2s, box-shadow .2s;
         }
-        .register-auth-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(56,97,251,.22), 0 0 22px rgba(56,97,251,.1); }
-        .register-auth-input::placeholder { color: #64748b; }
+        .register-auth-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--c-coral-soft), 0 0 22px var(--c-coral-glow); }
+        .register-auth-input::placeholder { color: var(--c-text-3); }
         .register-auth-submit {
           height: 48px;
-          background: linear-gradient(135deg, #3861fb, #6366f1);
+          background: var(--brand-gradient);
           color: var(--primary-contrast);
           border-radius: 8px;
           transition: transform .2s, filter .2s;
@@ -122,17 +142,13 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({
       <main className="register-auth-card">
         <div className="register-auth-content">
           <header className="mb-7 text-center">
+            <BrandLogo className="mx-auto mb-4 h-14 w-14 rounded-2xl" />
             <h1 className="text-2xl font-bold tracking-tight">Create your workspace</h1>
             <p className="mt-2 text-sm" style={{ color: 'var(--muted)' }}>Please enter your details to get started</p>
           </header>
 
-          <button type="button" aria-label="Continue with Google" className="h-11 w-full rounded-lg border flex items-center justify-center transition-colors hover:bg-white/5" style={{ borderColor: 'var(--border)' }}>
-            <svg width="19" height="19" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.35 12.23c0-.79-.07-1.55-.23-2.27H12v4.3h5.22a4.47 4.47 0 0 1-1.94 2.93v2.44h3.14c1.84-1.7 2.93-4.2 2.93-7.4Z"/><path fill="#34A853" d="M12 21.5c2.63 0 4.84-.87 6.45-2.37l-3.14-2.44c-.87.58-1.98.92-3.31.92-2.54 0-4.7-1.72-5.47-4.03H3.28v2.52A9.74 9.74 0 0 0 12 21.5Z"/><path fill="#FBBC05" d="M6.53 13.58a5.85 5.85 0 0 1 0-3.16V7.9H3.28a9.75 9.75 0 0 0 0 8.2l3.25-2.52Z"/><path fill="#EA4335" d="M12 6.39c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.84 3.48 14.63 2.5 12 2.5a9.74 9.74 0 0 0-8.72 5.4l3.25 2.52C7.3 8.11 9.46 6.39 12 6.39Z"/></svg>
-          </button>
-
-          <div className="my-6 flex items-center gap-3 text-xs" style={{ color: 'var(--muted)' }}><span className="h-px flex-1" style={{ background: 'var(--border)' }} /><span>Or</span><span className="h-px flex-1" style={{ background: 'var(--border)' }} /></div>
-
           {error && <div role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>}
+          {notice && <div role="status" className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm text-indigo-700">{notice}</div>}
 
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             <div>
@@ -154,13 +170,18 @@ export const RegisterOrganizer: React.FC<RegisterOrganizerProps> = ({
               {fieldErrors.password && <p className="mt-1 text-xs text-red-600">{fieldErrors.password}</p>}
             </div>
 
-            <div className="flex items-center justify-between py-1 text-sm">
+            {otpSent && <div>
+              <label htmlFor="register-otp" className="mb-2 block text-sm font-medium">Verification code</label>
+              <input id="register-otp" type="text" inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="Enter 6-digit code" className="register-auth-input font-mono tracking-[0.3em]" />
+              <p className="mt-1 text-xs" style={{ color: 'var(--muted)' }}>Check {email} to complete registration.</p>
+            </div>}
+
+            <div className="flex items-center py-1 text-sm">
               <label className="flex items-center gap-2" style={{ color: 'var(--muted)' }}><input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-4 w-4 rounded" /> Remember me</label>
-              <button type="button" className="font-medium hover:underline" style={{ color: 'var(--primary)' }} onClick={() => setError('Password recovery is not available during registration.')}>Forgot Password?</button>
             </div>
 
             <label className="flex items-start gap-2 text-xs" style={{ color: 'var(--muted)' }}><input type="checkbox" checked={agreedTerms} onChange={(e) => setAgreedTerms(e.target.checked)} className="mt-0.5 h-4 w-4 rounded" /><span>I agree to operate event doors responsibly and comply with attendee data privacy guidelines.</span></label>
-            <button type="submit" disabled={loading} className="register-auth-submit mt-2 flex w-full items-center justify-center gap-2 font-semibold"><span>{loading ? 'Creating Account...' : 'Create account'}</span>{loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <ArrowRightIcon size={17} />}</button>
+            <button type="submit" disabled={loading} className="register-auth-submit mt-2 flex w-full items-center justify-center gap-2 font-semibold"><span>{loading ? (otpSent ? 'Verifying…' : 'Sending code…') : (otpSent ? 'Verify and create account' : 'Continue with email verification')}</span>{loading ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <ArrowRightIcon size={17} />}</button>
           </form>
 
           <footer className="mt-7 text-center text-sm" style={{ color: 'var(--muted)' }}>

@@ -85,6 +85,12 @@ const startServer = async () => {
         if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim().length < 32) {
             throw new Error('JWT_SECRET must be configured with at least 32 characters.');
         }
+        if (!process.env.SUPER_ADMIN_EMAIL?.trim()) {
+            throw new Error('SUPER_ADMIN_EMAIL must be configured.');
+        }
+        if (!process.env.SMTP_USER?.trim() || !process.env.SMTP_PASS?.trim()) {
+            throw new Error('SMTP_USER and SMTP_PASS must be configured for email delivery.');
+        }
         await (0, db_js_1.connectDB)();
         serverInstance = app.listen(Number(PORT), '0.0.0.0', () => {
             console.log(`=========================================`);

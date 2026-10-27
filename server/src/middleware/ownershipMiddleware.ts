@@ -1,6 +1,7 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from './authMiddleware.js';
 import { Event, IEventDocument } from '../models/Event.js';
+import { hasValidSuperAdminToken } from './superAdminMiddleware.js';
 
 export interface EventAuthorizedRequest extends AuthenticatedRequest {
   event?: IEventDocument;
@@ -29,8 +30,7 @@ export const requireEventOwnership = async (
     }
 
     const organizerIdStr = req.organizer._id ? req.organizer._id.toString() : '';
-    // Cross-tenant access needs a DB-backed role; requireSuperAdmin verifies the passcode token.
-    const isSuperAdmin = req.organizer.role === 'superadmin';
+    const isSuperAdmin = hasValidSuperAdminToken(req);
 
     const query: any = { _id: rawEventId };
     if (!isSuperAdmin) {

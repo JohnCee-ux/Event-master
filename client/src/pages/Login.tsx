@@ -1,21 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
+import {
+  AlertTriangle, ArrowRight, ArrowUpRight, BarChart3, Check, ChevronRight,
+  Clock, Eye, EyeOff, Lock, Mail, RefreshCw, QrCode, ShieldCheck,
+  Ticket, Users, Wifi, WifiOff, X, Zap,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext.js';
 import { api } from '../api/apiClient.js';
-import {
-  ShieldCheckIcon,
-  AlertTriangleIcon,
-  EyeIcon,
-  EyeOffIcon,
-  ZapIcon,
-  ArrowRightIcon,
-  UsersIcon,
-  MailIcon,
-  TicketIcon,
-  QrCodeIcon,
-  CheckCircleIcon,
-  WifiOffIcon,
-  BarChartIcon
-} from '../components/icons/CustomIcons.js';
+import { BrandLogo } from '../components/BrandLogo.js';
 
 interface LoginProps {
   onNavigateToRegister: () => void;
@@ -27,10 +18,32 @@ interface LoginProps {
 
 type AuthTab = 'otp' | 'password';
 
+const BRAND_BUTTON = 'brand-gradient text-white hover:brightness-110';
+const field =
+  'w-full rounded-xl border border-stone-200 bg-[#f4f7f6] px-3.5 py-3 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:bg-white focus:outline-none';
+const btnBrand = `inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition disabled:opacity-50 ${BRAND_BUTTON}`;
+const linkBtn = 'text-sm text-stone-600 hover:text-stone-900 hover:underline underline-offset-4';
+const serif: React.CSSProperties = { fontFamily: "'Playfair Display', Georgia, 'Times New Roman', serif" };
+
+// Only the animations need real CSS. Everything else is Tailwind.
+const css = `
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@1,400;1,500&display=swap');
+@keyframes gk-scan { 0%,100% { top: 12%; opacity: .35; } 50% { top: 82%; opacity: 1; } }
+@keyframes gk-float { 0%,100% { transform: translateY(0) rotate(-8deg); } 50% { transform: translateY(-14px) rotate(-3deg); } }
+@keyframes gk-pulse-dot { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .5; transform: scale(.75); } }
+@keyframes gk-slide-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes gk-badge-shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+.gk-scan-line { position: absolute; left: 10%; right: 10%; height: 2px; background: linear-gradient(90deg, transparent, var(--c-coral-hi), transparent); box-shadow: 0 0 14px var(--c-coral-hi); animation: gk-scan 2s ease-in-out infinite; }
+.gk-float { animation: gk-float 5s ease-in-out infinite; }
+.gk-pulse-dot { animation: gk-pulse-dot 1.4s ease-in-out infinite; }
+.gk-slide-in { animation: gk-slide-in .35s ease-out both; }
+.gk-badge-shimmer { background: var(--brand-gradient); background-size: 200% auto; animation: gk-badge-shimmer 2.5s linear infinite; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+@media (prefers-reduced-motion: reduce) { .gk-scan-line, .gk-float, .gk-pulse-dot, .gk-slide-in, .gk-badge-shimmer { animation: none; } .gk-scan-line { top: 50%; } }
+`;
+
 export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateToLogin, onNavigateToPublicRegister, openAuthOnLoad = false, onCancelAuth }) => {
   const { login, sendOtp, loginWithOtp } = useAuth();
 
-  // Navigation modal state
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<AuthTab>('otp');
 
@@ -38,7 +51,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
     if (openAuthOnLoad) setShowAuthModal(true);
   }, [openAuthOnLoad]);
 
-  // OTP State
+  // OTP state
   const [otpEmail, setOtpEmail] = useState('');
   const [otpStep, setOtpStep] = useState<'input_email' | 'enter_code'>('input_email');
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
@@ -46,7 +59,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
   const [otpSentMessage, setOtpSentMessage] = useState<string | null>(null);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Password State
+  // Password state
   const [passwordEmail, setPasswordEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -64,17 +77,13 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
     onCancelAuth?.();
   };
 
-  // Common State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Countdown timer for OTP resend
   useEffect(() => {
     let timer: any;
     if (otpCooldown > 0) {
-      timer = setInterval(() => {
-        setOtpCooldown((prev) => prev - 1);
-      }, 1000);
+      timer = setInterval(() => setOtpCooldown((prev) => prev - 1), 1000);
     }
     return () => clearInterval(timer);
   }, [otpCooldown]);
@@ -85,16 +94,12 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
     return () => clearInterval(timer);
   }, [resetCooldown]);
 
-  // Handle OTP digit changes
   const handleOtpDigitChange = (index: number, val: string) => {
     const digit = val.replace(/\D/g, '').slice(-1);
     const newDigits = [...otpDigits];
     newDigits[index] = digit;
     setOtpDigits(newDigits);
-
-    if (digit && index < 5) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
+    if (digit && index < 5) otpInputRefs.current[index + 1]?.focus();
   };
 
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -108,19 +113,15 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
     if (!pasted) return;
     const newDigits = [...otpDigits];
-    for (let i = 0; i < 6; i++) {
-      newDigits[i] = pasted[i] || '';
-    }
+    for (let i = 0; i < 6; i++) newDigits[i] = pasted[i] || '';
     setOtpDigits(newDigits);
-    const nextIdx = Math.min(pasted.length, 5);
-    otpInputRefs.current[nextIdx]?.focus();
+    otpInputRefs.current[Math.min(pasted.length, 5)]?.focus();
   };
 
-  // Submit Send OTP
   const handleSendOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!otpEmail) {
-      setError('Please enter a valid email address');
+      setError('Enter a valid email address.');
       return;
     }
     setError(null);
@@ -132,18 +133,17 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
       setOtpSentMessage(res.message);
       setTimeout(() => otpInputRefs.current[0]?.focus(), 150);
     } catch (err: any) {
-      setError(err.message || 'Failed to send OTP code.');
+      setError(err.message || 'Could not send the code.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Submit Verify OTP
   const handleVerifyOtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const code = otpDigits.join('');
     if (code.length !== 6) {
-      setError('Please enter the complete 6-digit verification code.');
+      setError('Enter the full 6-digit code.');
       return;
     }
     setError(null);
@@ -152,13 +152,12 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
       await loginWithOtp(otpEmail, code);
       setShowAuthModal(false);
     } catch (err: any) {
-      setError(err.message || 'Invalid or expired OTP code.');
+      setError(err.message || 'That code is invalid or has expired.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Password Login
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -167,7 +166,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
       await login({ email: passwordEmail, password });
       setShowAuthModal(false);
     } catch (err: any) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      setError(err.message || 'Login failed. Check your email and password.');
     } finally {
       setLoading(false);
     }
@@ -176,7 +175,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
   const handleSendPasswordResetOtp = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!resetEmail) {
-      setError('Please enter a valid email address');
+      setError('Enter a valid email address.');
       return;
     }
     setError(null);
@@ -188,7 +187,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
       setOtpSentMessage(res.message);
       setTimeout(() => resetOtpInputRefs.current[0]?.focus(), 150);
     } catch (err: any) {
-      setError(err.message || 'Failed to send password reset code.');
+      setError(err.message || 'Could not send the reset code.');
     } finally {
       setLoading(false);
     }
@@ -206,15 +205,15 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
     e.preventDefault();
     const otp = resetOtpDigits.join('');
     if (otp.length !== 6) {
-      setError('Please enter the complete 6-digit verification code.');
+      setError('Enter the full 6-digit code.');
       return;
     }
     if (resetPassword.length < 6) {
-      setError('Password must be at least 6 characters.');
+      setError('Your password needs at least 6 characters.');
       return;
     }
     if (resetPassword !== resetPasswordConfirmation) {
-      setError('Passwords do not match.');
+      setError("Those passwords don't match.");
       return;
     }
     setError(null);
@@ -228,1518 +227,647 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
       setResetPasswordConfirmation('');
       setPasswordEmail(resetEmail);
       setPassword('');
-      setOtpSentMessage('Password reset successfully. Sign in with your new password.');
+      setOtpSentMessage('Password reset. Log in with your new password.');
     } catch (err: any) {
-      setError(err.message || 'Password reset failed.');
+      setError(err.message || 'Could not reset the password.');
     } finally {
       setLoading(false);
     }
   };
 
+  const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+
+  const otpBox =
+    'h-14 w-full max-w-[52px] rounded-xl border border-stone-200 bg-[#f4f7f6] text-center text-xl font-bold text-stone-900 focus:border-stone-400 focus:bg-white focus:outline-none';
+
+  const steps = [
+    {
+      n: '1', icon: <Users size={20} />, title: 'Create the event',
+      copy: 'Add the venue, date, capacity and ticket types, then publish when you are ready for sign-ups.',
+      bg: 'bg-[#dcd7fb]',
+      visual: (
+        <div className="mt-4 rounded-2xl border border-[#c4bdf7] bg-white p-4">
+          <div className="mb-2 text-xs font-semibold text-stone-400 uppercase tracking-wider">Event details</div>
+          <div className="space-y-2">
+            <div className="h-2.5 w-3/4 rounded-full bg-[#dcd7fb]" />
+            <div className="h-2.5 w-1/2 rounded-full bg-[#e8e5fc]" />
+            <div className="mt-3 flex gap-2">
+              <div className="flex-1 rounded-xl bg-[#dcd7fb] py-2 text-center text-[10px] font-bold text-indigo-700">General · 150</div>
+              <div className="flex-1 rounded-xl bg-[#ede9fd] py-2 text-center text-[10px] font-bold text-indigo-500">VIP · 20</div>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      n: '2', icon: <Ticket size={20} />, title: 'Guests get a ticket',
+      copy: 'People register on a public page and receive a unique QR ticket by email. Instantly.',
+      bg: 'bg-[#c3dcfb]',
+      visual: (
+        <div className="mt-4 rounded-2xl border border-[#aacdf8] bg-white p-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#c3dcfb]">
+              <QrCode size={20} className="text-blue-700" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-stone-800">Your ticket for Summit 2025</div>
+              <div className="mt-0.5 text-[10px] text-stone-400">Scan at the door · VIP access</div>
+              <div className="mt-1.5 flex gap-1">
+                {[...Array(3)].map((_, i) => <div key={i} className="h-1 w-1 rounded-full bg-blue-400" />)}
+                <div className="h-1 w-4 rounded-full bg-blue-300" />
+              </div>
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      n: '3', icon: <QrCode size={20} />, title: 'Scan at the door',
+      copy: 'Your team scans with a phone — no app install. Each scan instantly shows: ✓ Checked in, ⚠ Already scanned, or ✗ Invalid.',
+      bg: 'bg-[#b0e9c9]',
+      visual: (
+        <div className="mt-4 rounded-2xl border border-[#8fd4ad] bg-stone-900 p-4">
+          <div className="mb-1.5 flex items-center justify-between text-[10px] text-white/50">
+            <span>Gate 1 · Live</span>
+            <span className="flex items-center gap-1"><span className="gk-pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-400" />Online</span>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl bg-[#b0e9c9] px-3 py-2.5">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-white"><Check size={14} /></span>
+            <div>
+              <div className="text-xs font-bold">Sarah Jenkins</div>
+              <div className="text-[10px] text-stone-600">VIP · Checked in just now</div>
+            </div>
+          </div>
+          <div className="mt-1.5 flex items-center gap-2 rounded-xl bg-amber-100 px-3 py-2">
+            <AlertTriangle size={12} className="shrink-0 text-amber-600" />
+            <div className="text-[10px] font-medium text-amber-800">Marcus T. — Already scanned 2m ago</div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      n: '4', icon: <BarChart3 size={20} />, title: 'See how it went',
+      copy: 'Watch arrivals live, review the full audit log, and export the guest list the moment doors close.',
+      bg: 'bg-[#f6e7a8]',
+      visual: (
+        <div className="mt-4 rounded-2xl border border-[#e8d47e] bg-white p-4">
+          <div className="mb-2 flex items-baseline justify-between">
+            <div className="text-sm font-bold">128 <span className="text-xs font-normal text-stone-400">/ 200</span></div>
+            <div className="text-[10px] text-stone-500">64% arrived</div>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-stone-100">
+            <div className="h-full w-[64%] rounded-full bg-indigo-500" />
+          </div>
+          <div className="mt-3 grid grid-cols-3 gap-1 text-center text-[10px]">
+            <div className="rounded-lg bg-[#f6e7a8] py-1.5"><div className="font-bold text-stone-800">128</div><div className="text-stone-500">In</div></div>
+            <div className="rounded-lg bg-stone-50 py-1.5"><div className="font-bold text-stone-800">72</div><div className="text-stone-500">Pending</div></div>
+            <div className="rounded-lg bg-red-50 py-1.5"><div className="font-bold text-red-600">3</div><div className="text-stone-500">Dupes</div></div>
+          </div>
+        </div>
+      ),
+    },
+  ];
+
+  // White pill with a dark arrow circle, as in the reference
+  const pillCta = (label: string, onClick: () => void, small = false) => (
+    <button
+      onClick={onClick}
+      className={`group inline-flex items-center gap-3 rounded-full bg-white pl-5 pr-1.5 font-semibold text-stone-900 transition hover:bg-[#eef1ff] ${small ? 'py-1 text-sm' : 'py-1.5 text-[15px]'}`}
+    >
+      {label}
+      <span className={`flex items-center justify-center rounded-full bg-stone-900 text-white transition group-hover:bg-indigo-700 ${small ? 'h-7 w-7' : 'h-9 w-9'}`}>
+        <ArrowUpRight size={small ? 14 : 17} />
+      </span>
+    </button>
+  );
+
+  // ─── Interactive Offline Widget ────────────────────────────────────────────
+  const OfflineWidget: React.FC = () => {
+    const [isOffline, setIsOffline] = useState(true);
+    const [queue, setQueue] = useState([
+      { name: 'Ada Okafor', status: 'queued' as 'queued' | 'synced' },
+      { name: 'Tunde Bello', status: 'queued' as 'queued' | 'synced' },
+      { name: 'Chioma Eze', status: 'synced' as 'queued' | 'synced' },
+    ]);
+
+    const handleToggle = () => {
+      const goingOnline = isOffline;
+      setIsOffline(!goingOnline);
+      if (goingOnline) {
+        // Simulate sync when coming back online
+        let i = 0;
+        const iv = setInterval(() => {
+          setQueue(prev => prev.map((r, idx) => idx === i ? { ...r, status: 'synced' } : r));
+          i++;
+          if (i >= 2) clearInterval(iv);
+        }, 600);
+      } else {
+        setQueue(prev => prev.map((r, idx) => idx < 2 ? { ...r, status: 'queued' } : r));
+      }
+    };
+
+    return (
+      <div className="rounded-[32px] bg-[#eef2ff] p-6 sm:p-8">
+        <div className="flex items-start justify-between">
+          <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${isOffline ? 'bg-white text-indigo-700' : 'bg-emerald-100 text-emerald-700'} transition-colors duration-300`}>
+            {isOffline ? <WifiOff size={20} /> : <Wifi size={20} />}
+          </span>
+          {/* Toggle */}
+          <button
+            onClick={handleToggle}
+            aria-label={isOffline ? 'Simulate going online' : 'Simulate going offline'}
+            className={`relative inline-flex h-7 w-14 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-300 focus:outline-none ${
+              isOffline ? 'bg-stone-300' : 'bg-emerald-500'
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition-transform duration-300 ${
+                isOffline ? 'translate-x-0.5' : 'translate-x-7'
+              }`}
+            />
+          </button>
+        </div>
+        <div className="mt-4 flex items-center gap-2">
+          <h3 className="text-2xl font-semibold tracking-tight">
+            {isOffline ? 'Scans queue locally' : 'Back online — syncing'}
+          </h3>
+          {!isOffline && <RefreshCw size={18} className="animate-spin text-emerald-600" />}
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-stone-600">
+          {isOffline
+            ? "Toggle the switch above to simulate your Wi-Fi returning. Queued scans flush automatically the moment connectivity is restored."
+            : 'Scans saved during the outage are now pushing to the server. Zero entries lost, zero duplicates.'}
+        </p>
+        <div className="mt-5 space-y-2">
+          {queue.map((r) => (
+            <div key={r.name} className="gk-slide-in flex items-center justify-between rounded-xl bg-white px-4 py-3 text-sm">
+              <span className="font-medium">{r.name}</span>
+              <span className={`flex items-center gap-2 text-xs ${
+                r.status === 'synced' ? 'text-emerald-600' : 'text-amber-600'
+              }`}>
+                <span className={`gk-pulse-dot h-2 w-2 rounded-full ${
+                  r.status === 'synced' ? 'bg-emerald-500' : 'bg-amber-400'
+                }`} />
+                {r.status === 'synced' ? 'Synced ✓' : 'Queued offline'}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-right text-[11px] text-stone-400">Try toggling Wi-Fi above ↑</p>
+      </div>
+    );
+  };
+
   return (
-    <div className="login-page-root">
-      {/* ── CSS-in-JS styles for this redesigned page ── */}
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+    <div className="min-h-screen bg-white text-stone-900">
+      <style>{css}</style>
 
-        .login-page-root {
-          min-height: 100vh;
-          background: #060918;
-          color: #e2e8f0;
-          font-family: 'Inter', sans-serif;
-          position: relative;
-          overflow-x: hidden;
-        }
-
-        /* ── Ambient Background Effects ── */
-        .login-page-root::before {
-          content: '';
-          position: fixed;
-          top: -40%;
-          left: -20%;
-          width: 80vw;
-          height: 80vw;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(56,97,251,0.08) 0%, transparent 70%);
-          pointer-events: none;
-          z-index: 0;
-        }
-        .login-page-root::after {
-          content: '';
-          position: fixed;
-          bottom: -30%;
-          right: -15%;
-          width: 60vw;
-          height: 60vw;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%);
-          pointer-events: none;
-          z-index: 0;
-        }
-
-        /* ── Grid overlay ── */
-        .grid-overlay {
-          position: fixed;
-          inset: 0;
-          background-image:
-            linear-gradient(rgba(56,97,251,0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(56,97,251,0.03) 1px, transparent 1px);
-          background-size: 60px 60px;
-          pointer-events: none;
-          z-index: 0;
-          mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 100%);
-          -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 100%);
-        }
-
-        /* ── Floating Orbs ── */
-        .floating-orb {
-          position: absolute;
-          border-radius: 50%;
-          pointer-events: none;
-          z-index: 1;
-          filter: blur(1px);
-        }
-        .orb-1 {
-          width: 6px; height: 6px;
-          background: rgba(56,97,251,0.5);
-          top: 20%; left: 15%;
-          animation: floatOrb 8s ease-in-out infinite;
-          box-shadow: 0 0 12px rgba(56,97,251,0.4);
-        }
-        .orb-2 {
-          width: 4px; height: 4px;
-          background: rgba(99,102,241,0.4);
-          top: 60%; left: 80%;
-          animation: floatOrb 11s ease-in-out infinite reverse;
-          box-shadow: 0 0 8px rgba(99,102,241,0.3);
-        }
-        .orb-3 {
-          width: 3px; height: 3px;
-          background: rgba(129,140,248,0.5);
-          top: 35%; right: 25%;
-          animation: floatOrb 9s ease-in-out infinite 2s;
-          box-shadow: 0 0 10px rgba(129,140,248,0.3);
-        }
-        .orb-4 {
-          width: 5px; height: 5px;
-          background: rgba(56,97,251,0.3);
-          top: 75%; left: 35%;
-          animation: floatOrb 13s ease-in-out infinite 1s;
-          box-shadow: 0 0 14px rgba(56,97,251,0.25);
-        }
-
-        @keyframes floatOrb {
-          0%, 100% { transform: translate(0, 0) scale(1); opacity: 0.6; }
-          25% { transform: translate(20px, -30px) scale(1.2); opacity: 1; }
-          50% { transform: translate(-15px, -50px) scale(0.8); opacity: 0.4; }
-          75% { transform: translate(25px, -20px) scale(1.1); opacity: 0.8; }
-        }
-
-        /* ── Navbar ── */
-        .lp-nav {
-          position: fixed;
-          top: 0; left: 0; right: 0;
-          z-index: 40;
-          border-bottom: 1px solid rgba(255,255,255,0.04);
-          background: rgba(6,9,24,0.7);
-          backdrop-filter: blur(20px);
-          -webkit-backdrop-filter: blur(20px);
-        }
-        .lp-nav-inner {
-          max-width: 1280px;
-          margin: 0 auto;
-          padding: 0 2rem;
-          height: 72px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        .lp-logo {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          cursor: pointer;
-        }
-        .lp-logo-icon {
-          width: 36px; height: 36px;
-          border-radius: 10px;
-          background: linear-gradient(135deg, #3861fb 0%, #6366f1 100%);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-          box-shadow: 0 0 20px rgba(56,97,251,0.25);
-        }
-        .lp-logo-text {
-          font-weight: 800;
-          font-size: 1.25rem;
-          letter-spacing: -0.02em;
-          color: #fff;
-        }
-        .lp-nav-links {
-          display: flex;
-          align-items: center;
-          gap: 2rem;
-        }
-        .lp-nav-link {
-          font-size: 0.875rem;
-          font-weight: 500;
-          color: rgba(255,255,255,0.5);
-          background: none;
-          border: none;
-          cursor: pointer;
-          transition: color 0.2s;
-          letter-spacing: -0.01em;
-        }
-        .lp-nav-link:hover { color: #fff; }
-        .lp-nav-actions {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .lp-btn-ghost {
-          font-size: 0.875rem;
-          font-weight: 500;
-          color: rgba(255,255,255,0.6);
-          background: none;
-          border: none;
-          cursor: pointer;
-          transition: color 0.2s;
-          padding: 8px 16px;
-        }
-        .lp-btn-ghost:hover { color: #fff; }
-        .lp-btn-outline {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: #fff;
-          background: transparent;
-          border: 1px solid rgba(255,255,255,0.15);
-          border-radius: 999px;
-          padding: 10px 24px;
-          cursor: pointer;
-          transition: all 0.25s;
-          letter-spacing: -0.01em;
-        }
-        .lp-btn-outline:hover {
-          border-color: rgba(56,97,251,0.5);
-          background: rgba(56,97,251,0.08);
-          box-shadow: 0 0 20px rgba(56,97,251,0.15);
-        }
-        .lp-btn-nav-primary {
-          font-size: 0.875rem;
-          font-weight: 700;
-          color: #07102d;
-          background: #fff;
-          border: 1px solid #fff;
-          border-radius: 999px;
-          padding: 10px 20px;
-          cursor: pointer;
-          transition: all 0.25s;
-        }
-        .lp-btn-nav-primary:hover {
-          background: #dbeafe;
-          border-color: #dbeafe;
-          box-shadow: 0 0 24px rgba(255,255,255,0.16);
-        }
-
-        /* ── Hero ── */
-        .lp-hero {
-          padding-top: 124px;
-          padding-bottom: 64px;
-          padding-left: 2rem;
-          padding-right: 2rem;
-          position: relative;
-          z-index: 2;
-        }
-        .lp-hero-inner {
-          max-width: 1280px;
-          margin: 0 auto;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 4rem;
-        }
-        .lp-hero-text {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 1.5rem;
-          max-width: 650px;
-          text-align: left;
-          flex: 1 1 55%;
-        }
-        .lp-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 6px 16px;
-          border-radius: 999px;
-          background: rgba(56,97,251,0.08);
-          border: 1px solid rgba(56,97,251,0.2);
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: #818cf8;
-          letter-spacing: 0.02em;
-          width: fit-content;
-        }
-        .lp-badge-dot {
-          width: 6px; height: 6px;
-          border-radius: 50%;
-          background: #3861fb;
-          animation: pulse 2s ease-in-out infinite;
-          box-shadow: 0 0 8px rgba(56,97,251,0.5);
-        }
-
-        .lp-hero-title {
-          font-family: 'Inter', sans-serif;
-          font-size: clamp(3.25rem, 6vw, 5.5rem);
-          font-weight: 900;
-          color: #fff;
-          line-height: 1.0;
-          letter-spacing: -0.04em;
-        }
-        .lp-hero-title em {
-          font-family: 'Playfair Display', serif;
-          font-style: italic;
-          font-weight: 400;
-          background: linear-gradient(135deg, #818cf8 0%, #3861fb 50%, #60a5fa 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
-        }
-        .lp-hero-sub {
-          font-size: 1.125rem;
-          line-height: 1.7;
-          color: rgba(255,255,255,0.72);
-          max-width: 520px;
-          font-weight: 400;
-          letter-spacing: -0.01em;
-        }
-        .lp-hero-cta {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          flex-wrap: wrap;
-        }
-        .lp-btn-primary {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 14px 32px;
-          border-radius: 999px;
-          background: #fff;
-          color: #060918;
-          font-weight: 700;
-          font-size: 0.9375rem;
-          border: none;
-          cursor: pointer;
-          transition: all 0.25s;
-          letter-spacing: -0.01em;
-          box-shadow: 0 0 30px rgba(255,255,255,0.08);
-        }
-        .lp-btn-primary:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 8px 30px rgba(255,255,255,0.12);
-        }
-        .lp-btn-primary:active { transform: scale(0.98); }
-
-        .lp-btn-secondary {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 14px 28px;
-          border-radius: 999px;
-          background: transparent;
-          color: rgba(255,255,255,0.6);
-          font-weight: 500;
-          font-size: 0.9375rem;
-          border: 1px solid rgba(255,255,255,0.1);
-          cursor: pointer;
-          transition: all 0.25s;
-          letter-spacing: -0.01em;
-        }
-        .lp-btn-secondary:hover {
-          color: #fff;
-          border-color: rgba(255,255,255,0.2);
-          background: rgba(255,255,255,0.03);
-        }
-
-        /* ── Hero feature pills ── */
-        .lp-hero-pills {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: wrap;
-          padding-top: 0.25rem;
-        }
-        .lp-pill {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 0.75rem;
-          color: rgba(255,255,255,0.86);
-          font-weight: 700;
-          padding: 8px 11px;
-          background: rgba(56,97,251,0.1);
-          border: 1px solid rgba(129,140,248,0.28);
-          border-radius: 999px;
-        }
-        .lp-pill-icon {
-          width: 20px; height: 20px;
-          border-radius: 50%;
-          background: rgba(56,97,251,0.12);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #818cf8;
-        }
-        .lp-pill-icon svg { width: 11px; height: 11px; }
-
-        /* ── Hero Visual (3D-like abstract shape) ── */
-        .lp-hero-visual {
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 410px;
-          flex: 0 1 420px;
-        }
-        .lp-visual-glow {
-          position: absolute;
-          width: 400px; height: 400px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(56,97,251,0.15) 0%, transparent 70%);
-          filter: blur(40px);
-          animation: breathe 6s ease-in-out infinite;
-        }
-        @keyframes breathe {
-          0%, 100% { transform: scale(1); opacity: 0.6; }
-          50% { transform: scale(1.15); opacity: 1; }
-        }
-
-        /* Abstract glassy shape */
-        .lp-glass-shape {
-          position: relative;
-          width: 340px;
-          height: 340px;
-          z-index: 2;
-        }
-        .lp-glass-ring {
-          position: absolute;
-          border-radius: 50%;
-          border: 1px solid rgba(56,97,251,0.15);
-          animation: ringFloat 8s ease-in-out infinite;
-        }
-        .lp-glass-ring-1 { inset: 0; border-color: rgba(56,97,251,0.12); animation-delay: 0s; }
-        .lp-glass-ring-2 { inset: 20px; border-color: rgba(99,102,241,0.1); animation-delay: 1s; }
-        .lp-glass-ring-3 { inset: 40px; border-color: rgba(129,140,248,0.08); animation-delay: 2s; }
-        @keyframes ringFloat {
-          0%, 100% { transform: rotate(0deg) scale(1); }
-          50% { transform: rotate(5deg) scale(1.02); }
-        }
-
-        /* Phone mockup inside the visual */
-        .lp-phone-mock {
-          position: absolute;
-          top: 50%; left: 50%;
-          transform: translate(-50%, -50%);
-          width: 216px;
-          background: rgba(10,14,36,0.9);
-          border: 2px solid rgba(56,97,251,0.38);
-          border-radius: 28px;
-          overflow: hidden;
-          box-shadow: 0 24px 70px rgba(0,0,0,0.58), 0 0 46px rgba(56,97,251,0.18);
-          z-index: 3;
-        }
-        .lp-phone-notch {
-          width: 60px; height: 4px;
-          background: rgba(255,255,255,0.08);
-          border-radius: 4px;
-          margin: 12px auto 0;
-        }
-        .lp-phone-content {
-          padding: 16px 14px;
-        }
-        .lp-phone-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 12px;
-        }
-        .lp-phone-gate {
-          font-size: 0.5625rem;
-          font-weight: 800;
-          color: #818cf8;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-        }
-        .lp-phone-title {
-          font-size: 0.9375rem;
-          font-weight: 900;
-          color: #fff;
-          margin-top: 2px;
-        }
-        .lp-phone-scanner {
-          width: 100%;
-          aspect-ratio: 1;
-          background: rgba(0,0,0,0.5);
-          border: 2px solid rgba(56,97,251,0.3);
-          border-radius: 16px;
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          overflow: hidden;
-          margin-bottom: 12px;
-        }
-        .lp-phone-scanner::before {
-          content: '';
-          position: absolute;
-          left: 10%; right: 10%;
-          height: 2px;
-          background: linear-gradient(90deg, transparent, #3861fb, transparent);
-          box-shadow: 0 0 12px #3861fb;
-          animation: scanline 2s ease-in-out infinite;
-        }
-        @keyframes scanline {
-          0%, 100% { top: 15%; opacity: 0.3; }
-          50% { top: 80%; opacity: 0.9; }
-        }
-        .lp-phone-result {
-          padding: 11px 12px;
-          background: rgba(16,185,129,0.12);
-          border: 1px solid rgba(16,185,129,0.28);
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 8px;
-        }
-        .lp-phone-result-icon {
-          width: 24px; height: 24px;
-          border-radius: 50%;
-          background: rgba(16,185,129,0.15);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #34d399;
-          flex-shrink: 0;
-        }
-        .lp-phone-result-name {
-          font-size: 0.75rem;
-          font-weight: 800;
-          color: #fff;
-        }
-        .lp-phone-result-status {
-          font-size: 0.625rem;
-          font-weight: 600;
-          color: #34d399;
-        }
-
-        /* ── Trusted By ── */
-        .lp-trusted {
-          padding: 3rem 2rem;
-          border-top: 1px solid rgba(255,255,255,0.04);
-          border-bottom: 1px solid rgba(255,255,255,0.04);
-          background: rgba(6,9,24,0.5);
-          position: relative;
-          z-index: 2;
-        }
-        .lp-trusted-inner {
-          max-width: 1280px;
-          margin: 0 auto;
-        }
-        .lp-trusted-label {
-          text-align: center;
-          font-size: 0.75rem;
-          font-weight: 600;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          color: rgba(255,255,255,0.25);
-          margin-bottom: 2rem;
-        }
-        .lp-trusted-logos {
-          display: flex;
-          flex-wrap: wrap;
-          justify-content: center;
-          gap: 3rem;
-          opacity: 0.3;
-        }
-        .lp-trusted-logo {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-weight: 700;
-          font-size: 1.125rem;
-          color: rgba(255,255,255,0.7);
-        }
-
-        /* ── Features Bento ── */
-        .lp-features {
-          padding: 6rem 2rem;
-          position: relative;
-          z-index: 2;
-        }
-        .lp-features-inner {
-          max-width: 1280px;
-          margin: 0 auto;
-        }
-        .lp-features-header {
-          text-align: center;
-          max-width: 600px;
-          margin: 0 auto 4rem;
-        }
-        .lp-features-eyebrow {
-          font-size: 0.75rem;
-          font-weight: 900;
-          text-transform: uppercase;
-          letter-spacing: 0.1em;
-          color: #818cf8;
-          margin-bottom: 1rem;
-        }
-        .lp-features-title {
-          font-family: 'Inter', sans-serif;
-          font-size: clamp(2.5rem, 5vw, 3.5rem);
-          font-weight: 900;
-          color: #fff;
-          letter-spacing: -0.03em;
-          margin-bottom: 1rem;
-          line-height: 1.15;
-        }
-        .lp-features-title em {
-          font-family: 'Playfair Display', serif;
-          font-style: italic;
-          font-weight: 700;
-        }
-        .lp-features-sub {
-          font-size: 1rem;
-          font-weight: 600;
-          color: rgba(255,255,255,0.68);
-          line-height: 1.7;
-        }
-        .lp-bento {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 1.25rem;
-        }
-        @media (max-width: 768px) {
-          .lp-bento { grid-template-columns: 1fr; }
-        }
-        .lp-bento-card {
-          background: rgba(10,14,36,0.6);
-          border: 1px solid rgba(255,255,255,0.05);
-          border-radius: 24px;
-          padding: 2rem;
-          position: relative;
-          overflow: hidden;
-          transition: border-color 0.3s, box-shadow 0.3s;
-        }
-        .lp-bento-card:hover {
-          border-color: rgba(56,97,251,0.2);
-          box-shadow: 0 0 40px rgba(56,97,251,0.06);
-        }
-        .lp-bento-wide { grid-column: span 2; }
-        @media (max-width: 768px) {
-          .lp-bento-wide { grid-column: span 1; }
-        }
-        .lp-bento-glow {
-          position: absolute;
-          top: -40px; right: -40px;
-          width: 200px; height: 200px;
-          border-radius: 50%;
-          filter: blur(60px);
-          pointer-events: none;
-          opacity: 0;
-          transition: opacity 0.3s;
-        }
-        .lp-bento-card:hover .lp-bento-glow { opacity: 1; }
-        .lp-bento-icon {
-          width: 48px; height: 48px;
-          border-radius: 14px;
-          background: rgba(56,97,251,0.08);
-          border: 1px solid rgba(56,97,251,0.15);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 1.25rem;
-          color: #818cf8;
-        }
-        .lp-bento-card-title {
-          font-size: 1.375rem;
-          font-weight: 700;
-          color: #fff;
-          margin-bottom: 0.5rem;
-          letter-spacing: -0.02em;
-        }
-        .lp-bento-card-desc {
-          font-size: 0.875rem;
-          color: rgba(255,255,255,0.68);
-          line-height: 1.6;
-          margin-bottom: 1.5rem;
-        }
-        .lp-bento-demo {
-          padding: 1rem;
-          background: rgba(0,0,0,0.3);
-          border: 1px solid rgba(255,255,255,0.05);
-          border-radius: 14px;
-        }
-
-        /* ── Auth Modal ── */
-        .lp-modal-overlay {
-          position: fixed;
-          inset: 0;
-          z-index: 50;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1.5rem;
-          background: rgba(0,0,0,0.6);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          animation: modalFadeIn 0.25s ease-out;
-        }
-        @keyframes modalFadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        .lp-modal {
-          position: relative;
-          width: 100%;
-          max-width: 440px;
-          background: rgba(10,14,36,0.95);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 24px;
-          overflow: hidden;
-          box-shadow: 0 32px 80px rgba(0,0,0,0.5), 0 0 60px rgba(56,97,251,0.05);
-          animation: modalSlideUp 0.35s cubic-bezier(0.16,1,0.3,1);
-        }
-        @keyframes modalSlideUp {
-          from { transform: translateY(20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        .lp-modal-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 1.5rem 1.75rem;
-          border-bottom: 1px solid rgba(255,255,255,0.05);
-        }
-        .lp-modal-header-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-        .lp-modal-logo {
-          width: 36px; height: 36px;
-          border-radius: 10px;
-          background: linear-gradient(135deg, #3861fb 0%, #6366f1 100%);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-        }
-        .lp-modal-title {
-          font-size: 1.125rem;
-          font-weight: 700;
-          color: #fff;
-          letter-spacing: -0.02em;
-        }
-        .lp-modal-subtitle {
-          font-size: 0.75rem;
-          color: rgba(255,255,255,0.4);
-          margin-top: 1px;
-        }
-        .lp-modal-close {
-          width: 32px; height: 32px;
-          border-radius: 8px;
-          background: rgba(255,255,255,0.04);
-          border: none;
-          color: rgba(255,255,255,0.4);
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1rem;
-          transition: all 0.2s;
-        }
-        .lp-modal-close:hover { background: rgba(255,255,255,0.08); color: #fff; }
-
-        .lp-modal-tabs {
-          display: flex;
-          gap: 6px;
-          padding: 6px;
-          border-bottom: 1px solid rgba(255,255,255,0.05);
-          background: rgba(0,0,0,0.16);
-        }
-        .lp-modal-tab {
-          flex: 1;
-          padding: 10px 12px;
-          font-size: 0.8125rem;
-          font-weight: 600;
-          text-align: center;
-          background: transparent;
-          border: 1px solid transparent;
-          border-radius: 10px;
-          cursor: pointer;
-          color: rgba(255,255,255,0.48);
-          transition: all 0.2s;
-          letter-spacing: -0.01em;
-        }
-        .lp-modal-tab:hover { color: rgba(255,255,255,0.85); }
-        .lp-modal-tab-active {
-          color: #fff;
-          border-color: rgba(129,140,248,0.8);
-          background: rgba(56,97,251,0.26);
-          box-shadow: 0 4px 16px rgba(56,97,251,0.18);
-        }
-
-        .lp-modal-body {
-          padding: 1.75rem;
-        }
-        .lp-modal-footer {
-          padding: 1rem 1.75rem;
-          border-top: 1px solid rgba(255,255,255,0.05);
-          text-align: center;
-          font-size: 0.8125rem;
-          color: rgba(255,255,255,0.35);
-          background: rgba(0,0,0,0.15);
-        }
-        .lp-modal-footer-link {
-          color: #818cf8;
-          background: none;
-          border: none;
-          cursor: pointer;
-          font-weight: 700;
-          font-size: 0.8125rem;
-        }
-        .lp-modal-footer-link:hover { text-decoration: underline; }
-
-        /* ── Form Elements ── */
-        .lp-form-group {
-          margin-bottom: 1.25rem;
-        }
-        .lp-form-label {
-          display: block;
-          font-size: 0.6875rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          color: rgba(255,255,255,0.45);
-          margin-bottom: 8px;
-        }
-        .lp-input-wrap {
-          position: relative;
-        }
-        .lp-input-icon {
-          position: absolute;
-          left: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: rgba(255,255,255,0.25);
-          pointer-events: none;
-        }
-        .lp-input {
-          width: 100%;
-          padding: 13px 44px 13px 44px;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 14px;
-          color: #fff;
-          font-size: 0.9375rem;
-          font-family: 'Inter', sans-serif;
-          outline: none;
-          transition: all 0.2s;
-        }
-        .lp-input::placeholder { color: rgba(255,255,255,0.2); }
-        .lp-input:focus {
-          border-color: rgba(56,97,251,0.4);
-          box-shadow: 0 0 0 3px rgba(56,97,251,0.08);
-          background: rgba(56,97,251,0.03);
-        }
-
-        .lp-btn-submit {
-          width: 100%;
-          padding: 14px;
-          border-radius: 14px;
-          background: linear-gradient(135deg, #3861fb 0%, #6366f1 100%);
-          color: #fff;
-          font-weight: 700;
-          font-size: 0.9375rem;
-          border: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          transition: all 0.25s;
-          box-shadow: 0 4px 20px rgba(56,97,251,0.25);
-          letter-spacing: -0.01em;
-        }
-        .lp-btn-submit:hover {
-          box-shadow: 0 8px 32px rgba(56,97,251,0.35);
-          transform: translateY(-1px);
-        }
-        .lp-btn-submit:active { transform: scale(0.98); }
-        .lp-btn-submit:disabled { opacity: 0.5; pointer-events: none; }
-
-        .lp-error-box {
-          display: flex;
-          align-items: flex-start;
-          gap: 8px;
-          padding: 12px 16px;
-          margin-bottom: 1.25rem;
-          background: rgba(239,68,68,0.08);
-          border: 1px solid rgba(239,68,68,0.15);
-          border-radius: 14px;
-          color: #fca5a5;
-          font-size: 0.8125rem;
-        }
-
-        /* OTP grid */
-        .lp-otp-grid {
-          display: flex;
-          justify-content: space-between;
-          gap: 8px;
-          margin-bottom: 1rem;
-        }
-        .lp-otp-input {
-          width: 100%;
-          max-width: 56px;
-          height: 56px;
-          text-align: center;
-          font-size: 1.375rem;
-          font-weight: 800;
-          background: rgba(255,255,255,0.03);
-          border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 14px;
-          color: #fff;
-          outline: none;
-          font-family: 'Inter', sans-serif;
-          transition: all 0.2s;
-        }
-        .lp-otp-input:focus {
-          border-color: rgba(56,97,251,0.4);
-          box-shadow: 0 0 0 3px rgba(56,97,251,0.08);
-          background: rgba(56,97,251,0.03);
-        }
-
-        .lp-dev-otp {
-          padding: 12px 16px;
-          background: rgba(56,97,251,0.06);
-          border: 1px solid rgba(56,97,251,0.15);
-          border-radius: 14px;
-          color: #818cf8;
-          font-size: 0.8125rem;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 1rem;
-        }
-        .lp-dev-otp button {
-          background: none;
-          border: none;
-          color: #818cf8;
-          font-weight: 700;
-          cursor: pointer;
-          font-size: 0.8125rem;
-        }
-        .lp-dev-otp button:hover { text-decoration: underline; }
-
-        .lp-otp-actions {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-size: 0.8125rem;
-          color: rgba(255,255,255,0.35);
-          margin-bottom: 1.25rem;
-        }
-        .lp-otp-actions button {
-          background: none;
-          border: none;
-          cursor: pointer;
-          font-size: 0.8125rem;
-          color: rgba(255,255,255,0.35);
-          transition: color 0.2s;
-        }
-        .lp-otp-actions button:hover { color: #fff; }
-        .lp-otp-actions .lp-resend-active { color: #818cf8; }
-        .lp-otp-actions .lp-resend-active:hover { text-decoration: underline; }
-
-        .lp-toggle-pw {
-          position: absolute;
-          right: 14px;
-          top: 50%;
-          transform: translateY(-50%);
-          background: none;
-          border: none;
-          color: rgba(255,255,255,0.3);
-          cursor: pointer;
-          transition: color 0.2s;
-        }
-        .lp-toggle-pw:hover { color: #fff; }
-
-        .lp-otp-sent-info {
-          text-align: center;
-          margin-bottom: 1.5rem;
-        }
-        .lp-otp-sent-info .lp-otp-sent-label {
-          font-size: 0.8125rem;
-          color: rgba(255,255,255,0.4);
-        }
-        .lp-otp-sent-info .lp-otp-sent-email {
-          font-size: 0.875rem;
-          font-weight: 700;
-          color: #818cf8;
-          margin-top: 4px;
-        }
-
-        /* ── Micro bar chart ── */
-        .lp-mini-bars {
-          display: flex;
-          align-items: flex-end;
-          gap: 4px;
-          height: 80px;
-          padding: 12px;
-          background: rgba(0,0,0,0.3);
-          border: 1px solid rgba(255,255,255,0.05);
-          border-radius: 14px;
-        }
-        .lp-mini-bar {
-          flex: 1;
-          border-radius: 3px 3px 0 0;
-          transition: height 0.3s;
-        }
-
-        /* ── Scan Verification Snippet ── */
-        .lp-verify-snippet {
-          padding: 14px 16px;
-          background: rgba(0,0,0,0.3);
-          border: 1px solid rgba(255,255,255,0.05);
-          border-radius: 14px;
-        }
-        .lp-verify-snippet-label {
-          font-size: 0.6875rem;
-          color: rgba(255,255,255,0.3);
-          margin-bottom: 8px;
-        }
-        .lp-verify-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 4px;
-        }
-        .lp-verify-row span {
-          font-size: 0.8125rem;
-          font-family: 'IBM Plex Mono', monospace;
-          color: #34d399;
-        }
-
-        /* ── How it works ── */
-        .lp-how {
-          padding: 6rem 2rem 7rem;
-          position: relative;
-          z-index: 2;
-          border-top: 1px solid rgba(255,255,255,0.04);
-          background: radial-gradient(ellipse 70% 55% at 50% 30%, rgba(56,97,251,0.07), transparent 72%);
-        }
-        .lp-how-inner { max-width: 1280px; margin: 0 auto; }
-        .lp-how-header { max-width: 650px; margin: 0 auto 3.5rem; text-align: center; }
-        .lp-how-eyebrow { color: #a5b4fc; font-size: .75rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 1rem; }
-        .lp-how-title { color: #fff; font-size: clamp(2.25rem, 4.5vw, 3.5rem); font-weight: 900; letter-spacing: -.04em; line-height: 1.05; margin-bottom: 1rem; }
-        .lp-how-title em { color: #818cf8; font-family: 'Playfair Display', serif; font-style: italic; font-weight: 700; }
-        .lp-how-sub { color: rgba(255,255,255,.58); font-size: 1rem; line-height: 1.7; font-weight: 500; }
-        .lp-how-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
-        .lp-how-card { position: relative; min-height: 250px; padding: 1.5rem; overflow: hidden; background: rgba(10,14,36,.68); border: 1px solid rgba(255,255,255,.07); border-radius: 20px; transition: border-color .25s, transform .25s, box-shadow .25s; }
-        .lp-how-card:hover { transform: translateY(-5px); border-color: rgba(56,97,251,.35); box-shadow: 0 16px 40px rgba(0,0,0,.3), 0 0 30px rgba(56,97,251,.08); }
-        .lp-how-number { color: rgba(165,180,252,.95); font-family: 'IBM Plex Mono', monospace; font-size: .7rem; font-weight: 700; letter-spacing: .12em; }
-        .lp-how-icon { width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; margin: 1.25rem 0; color: #a5b4fc; background: rgba(56,97,251,.1); border: 1px solid rgba(56,97,251,.22); border-radius: 14px; }
-        .lp-how-card-title { color: #fff; font-size: 1.05rem; font-weight: 800; letter-spacing: -.02em; margin-bottom: .55rem; }
-        .lp-how-card-copy { color: rgba(255,255,255,.7); font-size: .84rem; line-height: 1.65; }
-        .lp-how-detail { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem; padding: 1.25rem 1.5rem; background: rgba(56,97,251,.06); border: 1px solid rgba(56,97,251,.14); border-radius: 16px; }
-        .lp-how-detail-item { display: flex; align-items: flex-start; gap: .7rem; }
-        .lp-how-detail-item svg { color: #818cf8; flex-shrink: 0; margin-top: 2px; }
-        .lp-how-detail-item strong { display: block; color: #fff; font-size: .78rem; margin-bottom: .2rem; }
-        .lp-how-detail-item span { color: rgba(255,255,255,.66); font-size: .72rem; line-height: 1.45; }
-
-        /* ── Offline status pill ── */
-        .lp-offline-pill {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 16px;
-          background: rgba(0,0,0,0.3);
-          border: 1px solid rgba(255,255,255,0.05);
-          border-radius: 14px;
-        }
-        .lp-offline-dot {
-          width: 8px; height: 8px;
-          border-radius: 50%;
-          background: #f59e0b;
-          animation: pulse 2s ease-in-out infinite;
-        }
-        .lp-offline-pill span {
-          font-size: 0.8125rem;
-          font-family: 'IBM Plex Mono', monospace;
-          color: rgba(255,255,255,0.78);
-        }
-
-        @media (max-width: 640px) {
-          .lp-nav-links { display: none !important; }
-          .lp-nav-inner { height: 64px; padding: 0 1rem; }
-          .lp-logo { gap: 7px; }
-          .lp-logo-icon { width: 30px; height: 30px; border-radius: 8px; }
-          .lp-logo-icon svg { width: 15px; height: 15px; }
-          .lp-logo-text { font-size: 1rem; }
-          .lp-nav-actions { gap: 4px; }
-          .lp-btn-ghost { font-size: 0.75rem; padding: 6px 8px; }
-          .lp-btn-nav-primary { font-size: 0.75rem; padding: 8px 12px; }
-          .lp-hero { padding-top: 112px; padding-bottom: 40px; }
-          .lp-hero-inner { flex-direction: column; gap: 1rem; }
-          .lp-hero-text { align-items: center; text-align: center; }
-          .lp-hero-cta { justify-content: center; }
-          .lp-hero-pills { justify-content: center; }
-          .lp-hero-visual { width: 100%; min-height: 360px; transform: scale(.88); margin-top: -1rem; }
-          .lp-features { padding: 3rem 1rem; }
-          .lp-how { padding: 4rem 1rem 5rem; }
-          .lp-how-grid, .lp-how-detail { grid-template-columns: 1fr; }
-        }
-      `}</style>
-
-      {/* ── Grid Background ── */}
-      <div className="grid-overlay" />
-
-      {/* ── Floating Orbs ── */}
-      <div className="floating-orb orb-1" />
-      <div className="floating-orb orb-2" />
-      <div className="floating-orb orb-3" />
-      <div className="floating-orb orb-4" />
-
-      {/* ── Navbar ── */}
-      <nav className="lp-nav">
-        <div className="lp-nav-inner">
-          <div className="lp-logo" onClick={() => window.scrollTo(0, 0)}>
-            <div className="lp-logo-icon">
-              <ZapIcon size={18} />
-            </div>
-            <span className="lp-logo-text">GateKeeper</span>
+      {/* ───── Hero ───── */}
+      <section
+        className="relative overflow-hidden px-4 pb-24 pt-4 sm:m-3 sm:rounded-[32px] sm:px-8 sm:pb-32 sm:pt-5"
+        style={{ background: 'linear-gradient(to bottom, var(--c-bg) 0%, var(--c-surface) 28%, var(--c-purple) 60%, var(--c-purple-hi) 82%, #ffffff 100%)' }}
+      >
+        {/* Floating pill nav */}
+        <header className="relative z-20 mx-auto flex max-w-3xl items-center justify-between rounded-full border border-white/10 bg-white/10 py-2 pl-3 pr-2 backdrop-blur-md">
+          <button onClick={() => window.scrollTo(0, 0)} className="flex items-center gap-2">
+            <BrandLogo className="h-8 w-8 rounded-full" />
+            <span className="text-[15px] font-semibold tracking-tight text-white">GateKeeper</span>
+          </button>
+          <nav className="hidden items-center gap-6 text-sm text-white/80 md:flex">
+            <button className="hover:text-white" onClick={() => scrollTo('preview')}>Product</button>
+            <button className="hover:text-white" onClick={() => scrollTo('features')}>Features</button>
+            <button className="hover:text-white" onClick={() => scrollTo('how-it-works')}>How it works</button>
+            {onNavigateToPublicRegister && <button className="hover:text-white" onClick={onNavigateToPublicRegister}>Attendee tickets</button>}
+          </nav>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <button className="px-2 text-sm text-white/80 hover:text-white" onClick={onNavigateToLogin}>Log in</button>
+            {pillCta('Get started', onNavigateToRegister, true)}
           </div>
+        </header>
 
-          <div className="lp-nav-links" style={{ display: 'none' }}>
-            <button className="lp-nav-link">How it Works</button>
-            <button className="lp-nav-link" onClick={onNavigateToPublicRegister}>Pricing</button>
-            <button className="lp-nav-link">Roadmap</button>
-            <button className="lp-nav-link">Discover</button>
-          </div>
-          <div className="lp-nav-links">
-            <button className="lp-nav-link" onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>How it Works</button>
-            <button className="lp-nav-link" onClick={onNavigateToPublicRegister}>Attendee Tickets</button>
-            <button className="lp-nav-link" onClick={() => setShowAuthModal(true)}>Security</button>
-          </div>
-
-          <div className="lp-nav-actions">
-            <button
-              className="lp-btn-ghost"
-              onClick={onNavigateToLogin}
-            >
-              Log in
-            </button>
-            <button className="lp-btn-nav-primary" onClick={onNavigateToRegister}>
-              Get Started
-            </button>
-          </div>
+        {/* Decorative: stripes + floating ticket */}
+        <div
+          className="pointer-events-none absolute right-0 top-[38%] hidden h-72 w-44 lg:block"
+          style={{
+            background: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.14) 0 22px, rgba(255,255,255,0.04) 22px 44px)',
+            WebkitMaskImage: 'linear-gradient(to bottom, #000, transparent)',
+            maskImage: 'linear-gradient(to bottom, #000, transparent)',
+          }}
+        />
+        <div className="gk-float pointer-events-none absolute right-[10%] top-[52%] hidden h-20 w-20 items-center justify-center rounded-3xl bg-gradient-to-br from-pink-400 via-orange-300 to-sky-400 text-white shadow-2xl md:flex">
+          <Ticket size={34} />
         </div>
-      </nav>
 
-      {/* ── Hero Section ── */}
-      <section className="lp-hero">
-        <div className="lp-hero-inner">
-          <div className="lp-hero-text">
-            <div className="lp-badge">
-              <span className="lp-badge-dot" />
-              GateKeeper v2.0 is live
+        {/* Headline */}
+        <div className="relative z-10 mx-auto max-w-4xl pt-16 text-center sm:pt-24">
+
+          {/* ── Trust badge ── */}
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-1.5 backdrop-blur-sm">
+            <span className="flex items-center gap-1 text-xs font-semibold text-white/90">
+              <ShieldCheck size={13} className="text-brand-coral" />
+              Trusted by organizers for 500+ events
+            </span>
+          </div>
+
+          <h1 className="text-[2.75rem] font-medium leading-[1.04] tracking-tight text-white sm:text-6xl lg:text-7xl">
+            Check-in that
+            <br />
+            <span style={serif} className="font-normal italic">keeps up with</span> the line
+          </h1>
+
+          {/* ── Offline capability callout ── */}
+          <div className="mx-auto mt-5 inline-flex items-center gap-2 rounded-2xl border border-brand-coral/40 bg-brand-coral/10 px-4 py-2">
+            <Zap size={14} className="shrink-0 text-brand-coral" />
+            <span className="text-sm font-semibold">
+              <span className="gk-badge-shimmer">100% Offline Capable</span>
+              <span className="ml-1 text-white/70 font-normal">— Zero Wi-Fi required at the door</span>
+            </span>
+          </div>
+
+          <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-white/75 sm:text-lg">
+            Register guests, email each one a QR ticket, and scan them in at the door. When the signal drops, scans save on the phone and sync later.
+          </p>
+
+          <div className="relative mt-9 flex flex-wrap items-center justify-center gap-5">
+            {/* hand-drawn arrow */}
+            <svg className="absolute -left-4 top-3 hidden h-12 w-24 text-white/70 md:block" viewBox="0 0 100 50" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+              <path d="M4 44 C 24 40, 46 16, 88 14" />
+              <path d="M80 8 L 90 14 L 82 22" />
+            </svg>
+            <div className="flex flex-col items-center gap-1.5">
+              {pillCta('Get started', onNavigateToRegister)}
+              <p className="text-[11px] text-white/50">No credit card required · First event free</p>
             </div>
-
-            <h1 className="lp-hero-title">
-              Zero Line Delays.<br />
-              Even <em>Offline.</em>
-            </h1>
-
-            <p className="lp-hero-sub">
-              Register attendees, issue secure QR tickets, and check people
-              in at scale — even when the network drops.
-            </p>
-
-            <div className="lp-hero-cta">
+            {onNavigateToPublicRegister && (
               <button
-                className="lp-btn-primary"
-                onClick={onNavigateToRegister}
+                onClick={onNavigateToPublicRegister}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white/85 backdrop-blur-sm transition hover:bg-white/20 hover:text-white"
               >
-                Get Started
-                <ArrowRightIcon size={16} />
+                <Ticket size={14} />
+                Looking for your ticket? <ChevronRight size={14} />
               </button>
-            </div>
-
-            <div className="lp-hero-pills">
-              <div className="lp-pill">
-                <div className="lp-pill-icon"><CheckCircleIcon size={11} /></div>
-                Offline-first sync
-              </div>
-              <div className="lp-pill">
-                <div className="lp-pill-icon"><CheckCircleIcon size={11} /></div>
-                Sub-100ms scans
-              </div>
-              <div className="lp-pill">
-                <div className="lp-pill-icon"><CheckCircleIcon size={11} /></div>
-                Cryptographic tickets
-              </div>
-            </div>
+            )}
           </div>
+        </div>
+      </section>
 
-          {/* ── Hero Visual ── */}
-          <div className="lp-hero-visual">
-            <div className="lp-visual-glow" />
-            <div className="lp-glass-shape">
-              <div className="lp-glass-ring lp-glass-ring-1" />
-              <div className="lp-glass-ring lp-glass-ring-2" />
-              <div className="lp-glass-ring lp-glass-ring-3" />
+      {/* ───── Social proof / Built for ───── */}
+      <section className="px-5 pb-6 pt-2 text-center sm:px-8">
+        <p className="text-sm text-stone-500">Built for events like</p>
+        <div className="mx-auto mt-3 flex max-w-3xl flex-wrap items-center justify-center gap-x-8 gap-y-2 text-lg font-semibold text-indigo-700/80">
+          {['Conferences', 'Church programs', 'Campus events', 'Weddings', 'Concerts', 'Workshops'].map((t) => (
+            <span key={t}>{t}</span>
+          ))}
+        </div>
+      </section>
 
-              <div className="lp-phone-mock">
-                <div className="lp-phone-notch" />
-                <div className="lp-phone-content">
-                  <div className="lp-phone-header">
+      {/* ───── Product preview ───── */}
+      <section id="preview" className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+        <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+          {/* Left: stat card + phone with scanner animation */}
+          <div className="relative overflow-hidden rounded-[32px] bg-gradient-to-b from-[#dbe4ff] to-[#c7d4ff] p-6 sm:p-10">
+            <div className="flex flex-col items-center justify-between gap-8 sm:flex-row sm:items-center">
+              <div className="w-full max-w-[260px] rounded-2xl bg-white p-5 shadow-xl">
+                <p className="text-sm text-stone-500">Checked in</p>
+                <p className="mt-1 text-4xl font-bold tabular-nums">128 <span className="text-lg font-medium text-stone-400">/ 200</span></p>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-stone-100">
+                  <div className="h-full w-[64%] rounded-full bg-indigo-600" />
+                </div>
+                <p className="mt-2 text-xs text-stone-500">64% have arrived</p>
+                <div className="mt-4 grid grid-cols-2 gap-2 text-center text-xs">
+                  <div className="rounded-xl bg-[#f1f5f4] py-2"><p className="text-base font-bold">72</p><p className="text-stone-500">Still to come</p></div>
+                  <div className="rounded-xl bg-[#f1f5f4] py-2"><p className="text-base font-bold">3</p><p className="text-stone-500">Duplicate scans</p></div>
+                </div>
+                {/* ── Performance metrics ── */}
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2 rounded-xl border border-stone-100 bg-stone-50 px-3 py-2">
+                    <Zap size={13} className="shrink-0 text-indigo-500" />
                     <div>
-                      <div className="lp-phone-gate">Gate 3 • Main</div>
-                      <div className="lp-phone-title">Scanner</div>
-                    </div>
-                    <div style={{ color: 'rgba(255,255,255,0.3)' }}>
-                      <WifiOffIcon size={14} />
+                      <div className="text-[11px] font-bold text-stone-800">&lt; 0.5s</div>
+                      <div className="text-[10px] text-stone-400">Scan speed</div>
                     </div>
                   </div>
-                  <div className="lp-phone-scanner">
-                    <QrCodeIcon size={64} className="text-white/10" />
-                  </div>
-                  <div className="lp-phone-result">
-                    <div className="lp-phone-result-icon">
-                      <CheckCircleIcon size={12} />
-                    </div>
+                  <div className="flex items-center gap-2 rounded-xl border border-stone-100 bg-stone-50 px-3 py-2">
+                    <ShieldCheck size={13} className="shrink-0 text-emerald-500" />
                     <div>
-                      <div className="lp-phone-result-name">Sarah Jenkins</div>
-                      <div className="lp-phone-result-status">VIP • Checked in</div>
+                      <div className="text-[11px] font-bold text-stone-800">Zero</div>
+                      <div className="text-[10px] text-stone-400">Double-entry risk</div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
-      {/* ── Trusted By ── */}
-      <section className="lp-trusted">
-        <div className="lp-trusted-inner">
-          <p className="lp-trusted-label">Trusted by modern event organizers</p>
-          <div className="lp-trusted-logos">
-            <div className="lp-trusted-logo"><ZapIcon size={22} /> Acme Events</div>
-            <div className="lp-trusted-logo"><ShieldCheckIcon size={22} /> SecureCon</div>
-            <div className="lp-trusted-logo"><BarChartIcon size={22} /> Summit Global</div>
-            <div className="lp-trusted-logo"><UsersIcon size={22} /> Festify</div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Features Bento ── */}
-      <section className="lp-features">
-        <div className="lp-features-inner">
-          <div className="lp-features-header">
-            <div className="lp-features-eyebrow">Why GateKeeper</div>
-            <h2 className="lp-features-title">
-              Unlock the Full Potential<br />of <em>Your Events</em>
-            </h2>
-            <p className="lp-features-sub">
-              Designed from the ground up to solve the hardest problems
-              in event operations: bad WiFi and long lines.
-            </p>
-          </div>
-
-          <div className="lp-bento">
-            {/* Card 1 — wide */}
-            <div className="lp-bento-card lp-bento-wide">
-              <div className="lp-bento-glow" style={{ background: 'rgba(245,158,11,0.08)' }} />
-              <div style={{ position: 'relative', zIndex: 1 }}>
-                <div className="lp-bento-icon" style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.15)', color: '#fbbf24' }}>
-                  <WifiOffIcon size={22} />
+              {/* Phone */}
+              <div className="w-56 shrink-0 rounded-[28px] bg-stone-900 p-3 shadow-2xl">
+                <div className="mb-2 flex items-center justify-between px-1 text-xs text-white/70">
+                  <span>Gate 3</span>
+                  <span className="flex items-center gap-1"><WifiOff size={12} /> Offline</span>
                 </div>
-                <div className="lp-bento-card-title">True Offline-First Sync</div>
-                <div className="lp-bento-card-desc">
-                  When the venue Wi-Fi drops, your lines don't stop.
-                  Scans are queued locally and sync automatically when
-                  the connection returns.
+                <div className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-black/70">
+                  <QrCode size={64} className="text-white/15" />
+                  <div className="absolute left-4 top-4 h-6 w-6 rounded-tl-lg border-l-4 border-t-4 border-brand-coral" />
+                  <div className="absolute right-4 top-4 h-6 w-6 rounded-tr-lg border-r-4 border-t-4 border-brand-coral" />
+                  <div className="absolute bottom-4 left-4 h-6 w-6 rounded-bl-lg border-b-4 border-l-4 border-brand-coral" />
+                  <div className="absolute bottom-4 right-4 h-6 w-6 rounded-br-lg border-b-4 border-r-4 border-brand-coral" />
+                  <div className="gk-scan-line" />
                 </div>
-                <div className="lp-offline-pill">
-                  <div className="lp-offline-dot" />
-                  <span>Offline mode: 24 scans queued</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Card 2 */}
-            <div className="lp-bento-card">
-              <div className="lp-bento-glow" style={{ background: 'rgba(56,97,251,0.08)' }} />
-              <div style={{ position: 'relative', zIndex: 1 }}>
-                <div className="lp-bento-icon">
-                  <QrCodeIcon size={22} />
-                </div>
-                <div className="lp-bento-card-title">Rapid Scanning</div>
-                <div className="lp-bento-card-desc">
-                  Built on zxing architecture for sub-100ms QR recognition.
-                </div>
-                <div className="lp-bento-demo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80px' }}>
-                  <QrCodeIcon size={40} className="text-white/10" />
-                </div>
-              </div>
-            </div>
-
-            {/* Card 3 */}
-            <div className="lp-bento-card">
-              <div className="lp-bento-glow" style={{ background: 'rgba(16,185,129,0.08)' }} />
-              <div style={{ position: 'relative', zIndex: 1 }}>
-                <div className="lp-bento-icon" style={{ background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.15)', color: '#34d399' }}>
-                  <BarChartIcon size={22} />
-                </div>
-                <div className="lp-bento-card-title">Live Analytics</div>
-                <div className="lp-bento-card-desc">
-                  Track check-ins across all gates in real-time.
-                </div>
-                <div className="lp-mini-bars">
-                  <div className="lp-mini-bar" style={{ height: '30%', background: 'rgba(52,211,153,0.3)' }} />
-                  <div className="lp-mini-bar" style={{ height: '60%', background: 'rgba(52,211,153,0.5)' }} />
-                  <div className="lp-mini-bar" style={{ height: '40%', background: 'rgba(52,211,153,0.6)' }} />
-                  <div className="lp-mini-bar" style={{ height: '80%', background: 'rgba(52,211,153,0.8)' }} />
-                  <div className="lp-mini-bar" style={{ height: '100%', background: '#34d399' }} />
-                </div>
-              </div>
-            </div>
-
-            {/* Card 4 — wide */}
-            <div className="lp-bento-card lp-bento-wide">
-              <div className="lp-bento-glow" style={{ background: 'rgba(6,182,212,0.08)' }} />
-              <div style={{ position: 'relative', zIndex: 1, display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: '200px' }}>
-                  <div className="lp-bento-icon" style={{ background: 'rgba(6,182,212,0.08)', borderColor: 'rgba(6,182,212,0.15)', color: '#22d3ee' }}>
-                    <ShieldCheckIcon size={22} />
-                  </div>
-                  <div className="lp-bento-card-title">Cryptographic Tickets</div>
-                  <div className="lp-bento-card-desc" style={{ marginBottom: 0 }}>
-                    HMAC signed payloads ensure tickets cannot be forged or duplicated.
-                  </div>
-                </div>
-                <div className="lp-verify-snippet" style={{ minWidth: '200px' }}>
-                  <div className="lp-verify-snippet-label">Ticket verification</div>
-                  <div className="lp-verify-row">
-                    <CheckCircleIcon size={14} className="text-emerald-400" />
-                    <span>Signature valid</span>
-                  </div>
-                  <div className="lp-verify-row">
-                    <CheckCircleIcon size={14} className="text-emerald-400" />
-                    <span>Base32 decoded</span>
+                <div className="mt-3 flex items-center gap-3 rounded-2xl bg-[#b0e9c9] px-3 py-3">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-emerald-700 text-white"><Check size={16} /></span>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold">Sarah Jenkins</p>
+                    <p className="text-xs text-stone-700">VIP · Checked in</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* Right: interactive offline widget */}
+          <OfflineWidget />
+        </div>
+        <p className="mt-3 text-center text-xs text-stone-400">Screens shown with example data.</p>
+      </section>
+
+      {/* ───── Features ───── */}
+      <section id="features" className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+        <div className="max-w-2xl">
+          <h2 className="text-3xl font-medium tracking-tight sm:text-5xl">
+            Made for busy doors and <span style={serif} className="italic">bad signal</span>
+          </h2>
+          <p className="mt-4 text-stone-600">Long queues and unreliable Wi-Fi wreck most events. These are built around both.</p>
+        </div>
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
+          {/* Scan speed */}
+          <div className="rounded-3xl bg-[#dcd7fb] p-6">
+            <div className="flex items-start justify-between">
+              <QrCode size={22} />
+              <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-bold text-indigo-700">&lt; 0.5s scan</span>
+            </div>
+            <h3 className="mt-4 text-xl font-bold">Scan with a phone</h3>
+            <p className="mt-2 text-sm text-stone-700">Open the scanner in a browser, point it at a QR code and get an answer straight away. You can also type in a ticket code manually.</p>
+          </div>
+          {/* Live arrivals */}
+          <div className="rounded-3xl bg-[#b0e9c9] p-6">
+            <div className="flex items-start justify-between">
+              <BarChart3 size={22} />
+              <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700">
+                <span className="gk-pulse-dot h-1.5 w-1.5 rounded-full bg-emerald-500" />Live
+              </span>
+            </div>
+            <h3 className="mt-4 text-xl font-bold">See arrivals as they happen</h3>
+            <p className="mt-2 text-sm text-stone-700">Registered, checked in and still to arrive, all in one place while the doors are open.</p>
+          </div>
+          {/* Fraud-proof */}
+          <div className="rounded-3xl bg-[#c3dcfb] p-6">
+            <div className="flex items-start justify-between">
+              <ShieldCheck size={22} />
+              <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-bold text-blue-700">Zero duplicates</span>
+            </div>
+            <h3 className="mt-4 text-xl font-bold">Tickets that can't be faked</h3>
+            <p className="mt-2 text-sm text-stone-700">Each ticket is signed, so a made-up QR code won't pass. A second scan is flagged instead of admitted twice, and every action goes in the audit log.</p>
+          </div>
         </div>
       </section>
 
-      {/* ── How It Works ── */}
-      <section id="how-it-works" className="lp-how">
-        <div className="lp-how-inner">
-          <div className="lp-how-header">
-            <div className="lp-how-eyebrow">How it works</div>
-            <h2 className="lp-how-title">From first ticket to final <em>report</em></h2>
-            <p className="lp-how-sub">One operational flow for organizers, attendees, and every gate team working the room.</p>
-          </div>
+      {/* ───── How it works ───── */}
+      <section id="how-it-works" className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+        <h2 className="max-w-2xl text-3xl font-medium tracking-tight sm:text-5xl">
+          From first ticket to <span style={serif} className="italic">final headcount</span>
+        </h2>
+        <p className="mt-3 max-w-xl text-stone-500">Four steps. No dev setup, no hardware, no special apps.</p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {steps.map((s) => (
+            <div key={s.n} className="rounded-3xl bg-[#f1f5f4] p-5">
+              <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${s.bg}`}>{s.icon}</div>
+              <p className="mt-4 text-xs font-medium text-stone-400">Step {s.n}</p>
+              <h3 className="mt-1 font-bold">{s.title}</h3>
+              <p className="mt-2 text-sm text-stone-600">{s.copy}</p>
+              {/* Mini illustration */}
+              {s.visual}
+            </div>
+          ))}
+        </div>
+      </section>
 
-          <div className="lp-how-grid">
-            <article className="lp-how-card">
-              <div className="lp-how-number">01 / SET UP</div>
-              <div className="lp-how-icon"><UsersIcon size={22} /></div>
-              <div className="lp-how-card-title">Create the event</div>
-              <div className="lp-how-card-copy">Set the venue, date, capacity, ticket types, and event prefix from the organizer workspace. Publish when registration is ready.</div>
-            </article>
-            <article className="lp-how-card">
-              <div className="lp-how-number">02 / ISSUE</div>
-              <div className="lp-how-icon"><TicketIcon size={22} /></div>
-              <div className="lp-how-card-title">Issue secure tickets</div>
-              <div className="lp-how-card-copy">Attendees register through the public portal and receive a unique QR ticket with a signed payload and ticket code.</div>
-            </article>
-            <article className="lp-how-card">
-              <div className="lp-how-number">03 / SCAN</div>
-              <div className="lp-how-icon"><QrCodeIcon size={22} /></div>
-              <div className="lp-how-card-title">Scan every gate</div>
-              <div className="lp-how-card-copy">Gate teams scan with the live ZXing-powered scanner. Each result is immediately marked valid, duplicate, invalid, or queued.</div>
-            </article>
-            <article className="lp-how-card">
-              <div className="lp-how-number">04 / LEARN</div>
-              <div className="lp-how-icon"><BarChartIcon size={22} /></div>
-              <div className="lp-how-card-title">See the full picture</div>
-              <div className="lp-how-card-copy">Watch attendance and gate velocity live, inspect the append-only audit trail, then export the final attendee summary after the event.</div>
-            </article>
+      {/* ───── CTA ───── */}
+      <section className="mx-auto max-w-6xl px-4 pb-14 sm:px-6">
+        <div
+          className="relative overflow-hidden rounded-[32px] px-6 py-14 text-center text-white sm:px-12"
+          style={{ background: 'linear-gradient(135deg, var(--c-surface) 0%, var(--c-purple) 100%)' }}
+        >
+          <div className="pointer-events-none absolute -right-8 -top-8 h-40 w-40 rounded-full bg-white/10" />
+          <div className="pointer-events-none absolute -bottom-12 left-10 h-32 w-32 rounded-full bg-white/10" />
+          {/* Trust badge inside CTA */}
+          <div className="relative mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium text-white/80">
+            <ShieldCheck size={12} className="text-brand-coral" /> Trusted for 500+ events worldwide
           </div>
-
-          <div className="lp-how-detail">
-            <div className="lp-how-detail-item"><WifiOffIcon size={17} /><div><strong>Built for bad WiFi</strong><span>Scans are stored locally and synchronized when the connection returns.</span></div></div>
-            <div className="lp-how-detail-item"><ShieldCheckIcon size={17} /><div><strong>Designed for trust</strong><span>Signed tickets, ownership controls, rate limits, and audit records protect operations.</span></div></div>
-            <div className="lp-how-detail-item"><CheckCircleIcon size={17} /><div><strong>Clear gate decisions</strong><span>Every scan gives the team a fast, readable answer at the door.</span></div></div>
+          <h2 className="relative text-3xl font-medium tracking-tight sm:text-5xl">
+            Running an event <span style={serif} className="italic">soon?</span>
+          </h2>
+          <p className="relative mx-auto mt-3 max-w-md text-white/75">Create your event, share the sign-up link, and be ready at the door in minutes.</p>
+          <div className="relative mt-7 flex flex-col items-center gap-2">
+            {pillCta('Get started free', onNavigateToRegister)}
+            <p className="text-[11px] text-white/45">No credit card required to start · Set up your first event free</p>
+          </div>
+          {/* Metrics row */}
+          <div className="relative mx-auto mt-8 flex flex-wrap items-center justify-center gap-6">
+            {[
+              { icon: <Zap size={14} />, label: '< 0.5s scan speed' },
+              { icon: <ShieldCheck size={14} />, label: 'Zero double-entry risk' },
+              { icon: <WifiOff size={14} />, label: '100% offline capable' },
+              { icon: <Clock size={14} />, label: 'Setup in under 5 min' },
+            ].map(m => (
+              <div key={m.label} className="flex items-center gap-1.5 text-xs text-white/60">
+                <span className="text-brand-coral">{m.icon}</span>
+                {m.label}
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ── Auth Modal ── */}
+      {/* ───── Footer ───── */}
+      <footer className="border-t border-stone-200">
+        <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+          <div className="flex flex-col gap-8 sm:flex-row sm:items-start sm:justify-between">
+            {/* Brand */}
+            <div className="max-w-xs">
+              <div className="flex items-center gap-2">
+                <BrandLogo className="h-8 w-8 rounded-full" />
+                <span className="text-lg font-extrabold tracking-tight">GateKeeper</span>
+              </div>
+              <p className="mt-2 text-sm font-medium leading-relaxed text-stone-600">
+                Event check-in and QR ticket scanning built for the real world — including bad Wi-Fi.
+              </p>
+            </div>
+            {/* Links */}
+            <div className="grid grid-cols-2 gap-8">
+              <div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-400">Product</p>
+                <ul className="space-y-2 text-sm text-stone-600">
+                  <li><button className="hover:text-stone-900 hover:underline underline-offset-4" onClick={() => scrollTo('features')}>Features</button></li>
+                  <li><button className="hover:text-stone-900 hover:underline underline-offset-4" onClick={() => scrollTo('how-it-works')}>How it works</button></li>
+                  <li><button className="hover:text-stone-900 hover:underline underline-offset-4" onClick={() => scrollTo('preview')}>See a demo</button></li>
+                </ul>
+              </div>
+              <div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-stone-400">Account</p>
+                <ul className="space-y-2 text-sm text-stone-600">
+                  <li>
+                    <button className="hover:text-stone-900 hover:underline underline-offset-4" onClick={onNavigateToLogin}>
+                      Organizer log in
+                    </button>
+                  </li>
+                  <li>
+                    <button className="hover:text-stone-900 hover:underline underline-offset-4" onClick={onNavigateToRegister}>
+                      Create account
+                    </button>
+                  </li>
+                  {onNavigateToPublicRegister && (
+                    <li>
+                      <button className="hover:text-stone-900 hover:underline underline-offset-4" onClick={onNavigateToPublicRegister}>
+                        Find my ticket
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div className="mt-8 flex flex-col items-center justify-between gap-2 border-t border-stone-100 pt-6 text-xs text-stone-400 sm:flex-row">
+            <span>© {new Date().getFullYear()} GateKeeper. All rights reserved.</span>
+            <div className="flex items-center gap-4">
+              <a href="/privacy" className="hover:text-stone-600">Privacy</a>
+              <a href="/terms" className="hover:text-stone-600">Terms</a>
+              <button className="hover:text-stone-600" onClick={onNavigateToLogin}>Organizer Login</button>
+            </div>
+          </div>
+        </div>
+      </footer>
+
+      {/* ───── Auth modal ───── */}
       {showAuthModal && (
-        <div className="lp-modal-overlay" onClick={handleCancelAuth}>
-          <div className="lp-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="lp-modal-header">
-              <div className="lp-modal-header-left">
-                <div className="lp-modal-logo">
-                  <ZapIcon size={16} />
-                </div>
-                <div>
-                  <div className="lp-modal-title">Sign In</div>
-                  <div className="lp-modal-subtitle">Access your organizer workspace</div>
-                </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/50 p-4" onClick={handleCancelAuth}>
+          <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between px-6 pb-2 pt-6">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight">Log in</h2>
+                <p className="mt-0.5 text-sm text-stone-500">Go to your organizer workspace</p>
               </div>
-              <button className="lp-modal-close" onClick={handleCancelAuth}>✕</button>
-            </div>
-
-            <div className="lp-modal-tabs">
-              <button
-                className={`lp-modal-tab ${activeTab === 'otp' ? 'lp-modal-tab-active' : ''}`}
-                onClick={() => { setActiveTab('otp'); setResetMode(false); setError(null); }}
-              >
-                Passwordless OTP
-              </button>
-              <button
-                className={`lp-modal-tab ${activeTab === 'password' ? 'lp-modal-tab-active' : ''}`}
-                onClick={() => { setActiveTab('password'); setResetMode(false); setError(null); }}
-              >
-                Password
+              <button onClick={handleCancelAuth} className="rounded-lg p-1.5 text-stone-400 hover:bg-[#f0f3f2] hover:text-stone-900" aria-label="Close">
+                <X size={18} />
               </button>
             </div>
 
-            <div className="lp-modal-body">
+            <div className="px-6 pt-3">
+              <div className="grid grid-cols-2 rounded-xl bg-[#f0f3f2] p-1">
+                {([
+                  { key: 'otp', label: 'Email code' },
+                  { key: 'password', label: 'Password' },
+                ] as { key: AuthTab; label: string }[]).map((t) => (
+                  <button
+                    key={t.key}
+                    onClick={() => { setActiveTab(t.key); setResetMode(false); setError(null); }}
+                    className={`rounded-lg py-2 text-sm transition ${activeTab === t.key ? 'bg-white font-semibold shadow-sm' : 'text-stone-500 hover:text-stone-800'}`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-6">
               {error && (
-                <div className="lp-error-box">
-                  <AlertTriangleIcon size={16} className="shrink-0" style={{ marginTop: '2px' }} />
+                <div role="alert" className="mb-4 flex items-start gap-2 rounded-xl bg-red-50 px-3.5 py-3 text-sm text-red-700">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
+              {!error && otpSentMessage && (
+                <div className="mb-4 rounded-xl bg-[#eefbc4] px-3.5 py-3 text-sm text-stone-800">{otpSentMessage}</div>
+              )}
 
               {activeTab === 'otp' && (
-                <div>
-                  {otpStep === 'input_email' ? (
-                    <form onSubmit={handleSendOtp}>
-                      <div className="lp-form-group">
-                        <label className="lp-form-label">Organizer Email</label>
-                        <div className="lp-input-wrap">
-                          <MailIcon size={16} className="lp-input-icon" />
-                          <input
-                            type="email"
-                            required
-                            value={otpEmail}
-                            onChange={(e) => setOtpEmail(e.target.value)}
-                            placeholder="you@example.com"
-                            className="lp-input"
-                          />
-                        </div>
+                otpStep === 'input_email' ? (
+                  <form onSubmit={handleSendOtp} className="space-y-4">
+                    <label className="block text-sm">
+                      <span className="mb-1 block font-medium">Email</span>
+                      <div className="relative">
+                        <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                        <input type="email" required value={otpEmail} onChange={(e) => setOtpEmail(e.target.value)} placeholder="you@example.com" className={`${field} pl-10`} />
                       </div>
-                      <button type="submit" disabled={loading} className="lp-btn-submit">
-                        {loading ? 'Sending...' : 'Send Passcode'}
+                    </label>
+                    <p className="text-xs text-stone-500">We'll email you a 6-digit code. No password needed.</p>
+                    <button type="submit" disabled={loading} className={`${btnBrand} w-full`}>
+                      {loading ? 'Sending…' : 'Send code'}
+                    </button>
+                  </form>
+                ) : (
+                  <form onSubmit={handleVerifyOtp}>
+                    <p className="mb-4 text-center text-sm text-stone-600">
+                      Enter the 6-digit code sent to<br /><span className="font-semibold text-stone-900">{otpEmail}</span>
+                    </p>
+                    <div className="mb-4 flex justify-between gap-2">
+                      {otpDigits.map((digit, idx) => (
+                        <input
+                          key={idx}
+                          ref={(el) => (otpInputRefs.current[idx] = el)}
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={1}
+                          value={digit}
+                          onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
+                          onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                          onPaste={handleOtpPaste}
+                          aria-label={`Digit ${idx + 1}`}
+                          className={otpBox}
+                        />
+                      ))}
+                    </div>
+                    <div className="mb-4 flex items-center justify-between text-sm">
+                      <button type="button" className={linkBtn} onClick={() => { setOtpStep('input_email'); setOtpDigits(['', '', '', '', '', '']); }}>
+                        Change email
                       </button>
-                    </form>
-                  ) : (
-                    <form onSubmit={handleVerifyOtp}>
-                      <div className="lp-otp-sent-info">
-                        <div className="lp-otp-sent-label">Enter the 6-digit code sent to</div>
-                        <div className="lp-otp-sent-email">{otpEmail}</div>
-                      </div>
-
-                      <div className="lp-otp-grid">
-                        {otpDigits.map((digit, idx) => (
-                          <input
-                            key={idx}
-                            ref={(el) => (otpInputRefs.current[idx] = el)}
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={1}
-                            value={digit}
-                            onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
-                            onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                            onPaste={handleOtpPaste}
-                            className="lp-otp-input"
-                          />
-                        ))}
-                      </div>
-
-                      <div className="lp-otp-actions">
-                        <button type="button" onClick={() => { setOtpStep('input_email'); setOtpDigits(['', '', '', '', '', '']); }}>
-                          ← Change email
-                        </button>
-                        <button
-                          type="button"
-                          disabled={otpCooldown > 0 || loading}
-                          onClick={() => handleSendOtp()}
-                          className={otpCooldown > 0 ? '' : 'lp-resend-active'}
-                        >
-                          {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : 'Resend Code'}
-                        </button>
-                      </div>
-
                       <button
-                        type="submit"
-                        disabled={loading || otpDigits.join('').length !== 6}
-                        className="lp-btn-submit"
+                        type="button"
+                        disabled={otpCooldown > 0 || loading}
+                        onClick={() => handleSendOtp()}
+                        className={otpCooldown > 0 ? 'text-stone-400' : 'font-medium text-stone-900 hover:underline'}
                       >
-                        {loading ? 'Verifying...' : 'Verify & Enter Workspace'}
+                        {otpCooldown > 0 ? `Resend in ${otpCooldown}s` : 'Resend code'}
                       </button>
-                    </form>
-                  )}
-                </div>
+                    </div>
+                    <button type="submit" disabled={loading || otpDigits.join('').length !== 6} className={`${btnBrand} w-full`}>
+                      {loading ? 'Checking…' : 'Log in'}
+                    </button>
+                  </form>
+                )
               )}
 
               {activeTab === 'password' && (
                 resetMode ? (
                   <div>
-                    <div className="lp-otp-sent-info">
-                      <div className="lp-otp-sent-label">Reset your organizer password</div>
-                      <div className="lp-otp-sent-email">A verification code will be sent to your email.</div>
-                    </div>
+                    <h3 className="font-semibold">Reset your password</h3>
+                    <p className="mb-4 mt-1 text-sm text-stone-500">We'll email you a code to confirm it's you.</p>
                     {resetStep === 'input_email' ? (
-                      <form onSubmit={handleSendPasswordResetOtp}>
-                        <div className="lp-form-group">
-                          <label className="lp-form-label">Organizer Email</label>
-                          <div className="lp-input-wrap">
-                            <MailIcon size={16} className="lp-input-icon" />
-                            <input
-                              type="email"
-                              required
-                              value={resetEmail}
-                              onChange={(e) => setResetEmail(e.target.value)}
-                              placeholder="you@example.com"
-                              className="lp-input"
-                            />
+                      <form onSubmit={handleSendPasswordResetOtp} className="space-y-4">
+                        <label className="block text-sm">
+                          <span className="mb-1 block font-medium">Email</span>
+                          <div className="relative">
+                            <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                            <input type="email" required value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="you@example.com" className={`${field} pl-10`} />
                           </div>
-                        </div>
-                        <button type="submit" disabled={loading} className="lp-btn-submit">
-                          {loading ? 'Sending...' : 'Send Reset Code'}
+                        </label>
+                        <button type="submit" disabled={loading} className={`${btnBrand} w-full`}>
+                          {loading ? 'Sending…' : 'Send reset code'}
                         </button>
                       </form>
                     ) : (
-                      <form onSubmit={handleResetPassword}>
-                        <div className="lp-otp-sent-info">
-                          <div className="lp-otp-sent-label">Enter the code sent to</div>
-                          <div className="lp-otp-sent-email">{resetEmail}</div>
-                        </div>
-                        <div className="lp-otp-grid">
+                      <form onSubmit={handleResetPassword} className="space-y-4">
+                        <p className="text-center text-sm text-stone-600">
+                          Enter the code sent to <span className="font-semibold text-stone-900">{resetEmail}</span>
+                        </p>
+                        <div className="flex justify-between gap-2">
                           {resetOtpDigits.map((digit, idx) => (
                             <input
                               key={idx}
@@ -1749,112 +877,86 @@ export const Login: React.FC<LoginProps> = ({ onNavigateToRegister, onNavigateTo
                               maxLength={1}
                               value={digit}
                               onChange={(e) => handleResetOtpDigitChange(idx, e.target.value)}
-                              className="lp-otp-input"
+                              aria-label={`Digit ${idx + 1}`}
+                              className={otpBox}
                             />
                           ))}
                         </div>
-                        <div className="lp-form-group">
-                          <label className="lp-form-label">New Password</label>
-                          <input
-                            type="password"
-                            required
-                            minLength={6}
-                            value={resetPassword}
-                            onChange={(e) => setResetPassword(e.target.value)}
-                            className="lp-input"
-                          />
-                        </div>
-                        <div className="lp-form-group">
-                          <label className="lp-form-label">Confirm New Password</label>
-                          <input
-                            type="password"
-                            required
-                            minLength={6}
-                            value={resetPasswordConfirmation}
-                            onChange={(e) => setResetPasswordConfirmation(e.target.value)}
-                            className="lp-input"
-                          />
-                        </div>
-                        <div className="lp-otp-actions">
-                          <button type="button" onClick={() => { setResetStep('input_email'); setResetOtpDigits(['', '', '', '', '', '']); }}>
-                            ← Change email
+                        <label className="block text-sm">
+                          <span className="mb-1 block font-medium">New password</span>
+                          <input type="password" required minLength={6} value={resetPassword} onChange={(e) => setResetPassword(e.target.value)} className={field} />
+                        </label>
+                        <label className="block text-sm">
+                          <span className="mb-1 block font-medium">Confirm new password</span>
+                          <input type="password" required minLength={6} value={resetPasswordConfirmation} onChange={(e) => setResetPasswordConfirmation(e.target.value)} className={field} />
+                        </label>
+                        <div className="flex items-center justify-between text-sm">
+                          <button type="button" className={linkBtn} onClick={() => { setResetStep('input_email'); setResetOtpDigits(['', '', '', '', '', '']); }}>
+                            Change email
                           </button>
                           <button
                             type="button"
                             disabled={resetCooldown > 0 || loading}
                             onClick={() => handleSendPasswordResetOtp()}
-                            className={resetCooldown > 0 ? '' : 'lp-resend-active'}
+                            className={resetCooldown > 0 ? 'text-stone-400' : 'font-medium text-stone-900 hover:underline'}
                           >
-                            {resetCooldown > 0 ? `Resend in ${resetCooldown}s` : 'Resend Code'}
+                            {resetCooldown > 0 ? `Resend in ${resetCooldown}s` : 'Resend code'}
                           </button>
                         </div>
-                        <button type="submit" disabled={loading} className="lp-btn-submit">
-                          {loading ? 'Resetting...' : 'Reset Password'}
+                        <button type="submit" disabled={loading} className={`${btnBrand} w-full`}>
+                          {loading ? 'Resetting…' : 'Reset password'}
                         </button>
                       </form>
                     )}
-                    <button
-                      type="button"
-                      className="lp-modal-footer-link"
-                      onClick={() => { setResetMode(false); setResetStep('input_email'); setError(null); }}
-                    >
-                      ← Back to sign in
+                    <button type="button" className={`${linkBtn} mt-4`} onClick={() => { setResetMode(false); setResetStep('input_email'); setError(null); }}>
+                      Back to log in
                     </button>
                   </div>
                 ) : (
-                  <form onSubmit={handlePasswordLogin}>
-                    <div className="lp-form-group">
-                      <label className="lp-form-label">Email</label>
-                      <div className="lp-input-wrap">
-                        <MailIcon size={16} className="lp-input-icon" />
-                        <input
-                          type="email"
-                          required
-                          value={passwordEmail}
-                          onChange={(e) => setPasswordEmail(e.target.value)}
-                          className="lp-input"
-                        />
+                  <form onSubmit={handlePasswordLogin} className="space-y-4">
+                    <label className="block text-sm">
+                      <span className="mb-1 block font-medium">Email</span>
+                      <div className="relative">
+                        <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                        <input type="email" required value={passwordEmail} onChange={(e) => setPasswordEmail(e.target.value)} className={`${field} pl-10`} />
                       </div>
-                    </div>
-                    <div className="lp-form-group">
-                      <label className="lp-form-label">Password</label>
-                      <div className="lp-input-wrap">
-                        <ShieldCheckIcon size={16} className="lp-input-icon" />
+                    </label>
+                    <label className="block text-sm">
+                      <span className="mb-1 block font-medium">Password</span>
+                      <div className="relative">
+                        <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
                         <input
                           type={showPassword ? 'text' : 'password'}
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
-                          className="lp-input"
-                          style={{ paddingRight: '44px' }}
+                          className={`${field} pl-10 pr-10`}
                         />
-                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="lp-toggle-pw">
-                          {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
                       </div>
-                    </div>
-                    <button type="submit" disabled={loading} className="lp-btn-submit">
-                      {loading ? 'Authenticating...' : 'Sign In'}
+                    </label>
+                    <button type="submit" disabled={loading} className={`${btnBrand} w-full`}>
+                      {loading ? 'Logging in…' : 'Log in'}
                     </button>
-                    <button
-                      type="button"
-                      className="lp-modal-footer-link"
-                      onClick={() => { setResetMode(true); setResetEmail(passwordEmail); setError(null); }}
-                    >
-                      Forgot password?
+                    <button type="button" className={linkBtn} onClick={() => { setResetMode(true); setResetEmail(passwordEmail); setError(null); }}>
+                      Forgot your password?
                     </button>
                   </form>
                 )
               )}
             </div>
 
-            <div className="lp-modal-footer">
-              Don't have an account?{' '}
-              <button
-                className="lp-modal-footer-link"
-                onClick={() => { setShowAuthModal(false); onNavigateToRegister(); }}
-              >
-                Register here
+            <div className="border-t border-stone-100 px-6 py-4 text-center text-sm text-stone-500">
+              New here?{' '}
+              <button className="font-semibold text-stone-900 hover:underline" onClick={() => { setShowAuthModal(false); onNavigateToRegister(); }}>
+                Create an account
               </button>
             </div>
           </div>

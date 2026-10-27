@@ -1,56 +1,10 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Organizer = void 0;
-const mongoose_1 = __importStar(require("mongoose"));
-const db_js_1 = require("../config/db.js");
-const memoryDb_js_1 = require("../config/memoryDb.js");
-const OrganizerSchema = new mongoose_1.Schema({
-    name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true, index: true },
-    passwordHash: { type: String, required: true },
-    role: { type: String, enum: ['organizer', 'superadmin'], default: 'organizer' },
-}, { timestamps: true });
-const MongooseOrganizer = mongoose_1.default.model('Organizer', OrganizerSchema);
-exports.Organizer = {
-    findOne: (query) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.findOne(query) : MongooseOrganizer.findOne(query)),
-    findById: (id) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.findById(id) : MongooseOrganizer.findById(id)),
-    create: (data) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.create(data) : MongooseOrganizer.create(data)),
-    find: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.find(query) : MongooseOrganizer.find(query)),
-    countDocuments: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.countDocuments(query) : MongooseOrganizer.countDocuments(query)),
-    findByIdAndDelete: (id) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.findByIdAndDelete(id) : MongooseOrganizer.findByIdAndDelete(id)),
-    deleteOne: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.deleteOne(query) : MongooseOrganizer.deleteOne(query)),
-    deleteMany: (query = {}) => (db_js_1.isUsingMemoryStore ? memoryDb_js_1.memoryStore.organizers.deleteMany(query) : MongooseOrganizer.deleteMany(query)),
-};
+const supabaseModel_js_1 = require("./supabaseModel.js");
+exports.Organizer = (0, supabaseModel_js_1.createCollection)('organizers', {
+    _id: 'id',
+    passwordHash: 'password_hash',
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+});

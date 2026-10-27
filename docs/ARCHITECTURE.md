@@ -5,7 +5,7 @@ events, attendees self-register through a public link and receive a QR ticket, a
 scan tickets — including while offline at the venue.
 
 Two deployable units: a React SPA (`client/`) and an Express API (`server/`), sharing type
-editions from `shared/types.ts`. MongoDB is the only stateful dependency.
+editions from `shared/types.ts`. Supabase PostgreSQL is the only stateful dependency.
 
 All file paths in this document are relative to the repository root.
 
@@ -34,7 +34,7 @@ All file paths in this document are relative to the repository root.
                     │  zod validation → models → audit log          │
                     └───────┬───────────────────────┬──────────────┘
                             │                       │
-                     MongoDB (Atlas)          Resend (email)
+                     Supabase PostgreSQL      Gmail SMTP via Nodemailer
                                               qrcode (ticket image)
 ```
 
@@ -43,7 +43,7 @@ All file paths in this document are relative to the repository root.
 | `client/` | Session state, offline queue, camera scanning, all rendering | Authorisation decisions, capacity, ticket uniqueness |
 | `server/` | Identity, tenancy, capacity, ticket issuance, audit trail | Rendering, offline buffering |
 | `shared/types.ts` | Wire contract between the two | Runtime logic |
-| MongoDB | Durable state; compound uniqueness enforces registration invariants | — |
+| Supabase PostgreSQL | Durable state; constraints enforce registration invariants | — |
 
 The client is untrusted. Every rule the client enforces (capacity, one check-in per ticket,
 event ownership) is enforced again server-side. That duplication is deliberate and correct.
@@ -67,8 +67,8 @@ claims — means a deleted account loses access before its token expires.
 
 `requireEventOwnership` resolves the event from whichever param carries the id
 (`:id`, `:eventId`, query, or body), then scopes the lookup by `organizerId` unless the
-account holds the `superadmin` role. Handlers downstream receive `req.event` already
-authorised, so no route can forget the tenancy check.
+request carries a valid short-lived Super Admin token. Handlers downstream receive
+`req.event` already authorised, so no route can forget the tenancy check.
 
 API surface (all under `/api`):
 
@@ -78,7 +78,7 @@ API surface (all under `/api`):
 | `/events` | cookie | event CRUD, publish/start/end lifecycle, analytics, summary, CSV export, audit log |
 | `/attendees` | public + cookie | public registration, ticket lookup, check-in by code, listing, resend |
 | `/checkins` | cookie | batch sync of offline scans |
-| `/super-admin` | cookie + passcode JWT | cross-tenant oversight, user/event/registration purge, exports |
+| `/super-admin` | cookie + OTP JWT | cross-tenant oversight, user/event/registration purge, exports |
 
 Event lifecycle is a guarded state machine: `DRAFT → UPCOMING → LIVE → ENDED`. Every
 transition re-reads the current status and rejects the call with 400 if the precondition
@@ -158,23 +158,39 @@ likely real-world data problem in the system.
 web client never touches the token — no XSS path to session theft. `authenticated` is resolved
 from the database per request.
 
-**Super admin.** A separate passcode (`SUPER_ADMIN_PASSWORD`) exchanged for a second,
-short-lived JWT carrying `superAdminAuth: true`. `requireSuperAdmin` verifies that token's
-signature *and* that the id matches the logged-in organizer. Cross-tenant powers do not
-leak from the organizer session.
+**Super admin.** Access is restricted to the one normalized email configured by
+`SUPER_ADMIN_EMAIL`. After normal organizer authentication, the account requests a six-digit
+one-time code delivered to that address through Nodemailer/Gmail SMTP. The code expires after
+10 minutes and allows five verification attempts. Successful verification exchanges the code
+for a second, short-lived JWT carrying `superAdminAuth: true`. The elevated role is not
+persisted as an authorization grant. `requireSuperAdmin` and event ownership checks verify the
+configured email, token signature, and that the token id matches the logged-in organizer.
+Cross-tenant powers end when the elevated token expires or is locked.
 
-**Rate limits.** In-process `express-rate-limit`: 30/min on public registration, 20/15 min on
-auth, 10/15 min on ticket lookup. Correct for a single instance; meaningless across replicas.
+**Rate limits.** In-process `express-rate-limit`: 30/min on public attendee registration,
+20/15 min on auth routes, and 10/15 min on ticket lookup. OTP issuance also has a shared
+per-email quota of five requests per hour across login, password reset, organizer registration,
+and Super Admin verification. These controls are correct for a single instance; distributed
+deployments need shared storage.
 
-**Errors.** Central handler maps Mongoose validation, cast, duplicate-key, JWT, and malformed
-JSON into 4xx with a message, falling through to 500 otherwise. Rotation of `err.message` into
-the response body means internal failures can leak driver text.
+**Organizer registration.** `/register` does not create an account immediately. The server first
+checks whether the normalized email already exists, stores the pending registration in process
+memory, and sends a registration OTP. The account is created only after the six-digit code is
+verified. Existing accounts receive an explicit conflict response and the client directs the
+user to login.
 
-**DB resolution** (`server/src/config/db.ts`): four tiers — `MONGO_URI` → local `27017` →
-embedded `MongoMemoryServer` → an in-process JS store (`memoryDb.ts`, 234 lines reimplementing
-a Mongo query subset). The intent is a zero-setup dev experience. In production it is a
-liability: a failed Atlas connection still starts the server successfully on an ephemeral store.
-See finding C2.
+**Email delivery.** Attendee ticket emails, ticket resends, login OTPs, password-reset OTPs,
+organizer-registration OTPs, and Super Admin OTPs all use one Gmail SMTP transporter created by
+Nodemailer. `SMTP_USER` and `SMTP_PASS` are required; there is no Resend, Ethereal, or silent
+development fallback.
+
+**Errors.** Central handling maps validation, duplicate-key, JWT, and malformed JSON failures
+into 4xx responses, falling through to 500 otherwise. Returning `err.message` for unexpected
+failures can still expose implementation details and should be tightened before production.
+
+**DB connection** (`server/src/config/db.ts`): the API validates its Supabase connection during
+startup. Production requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`; the service-role
+key remains server-only. Apply `supabase/schema.sql` before starting the API.
 
 ---
 
@@ -182,7 +198,7 @@ See finding C2.
 
 | Environment | Client | API | Notes |
 |---|---|---|---|
-| Local dev | `vite` :5173 | `tsx watch` :5000 | Vite proxies `/api` → `:5000` |
+| Local dev | `vite` :5173 | `tsx watch` :5001 | Vite proxies `/api` → `:5001` |
 | Compose | nginx :8080 | node :5000 | `docker compose up --build` |
 | Production | GHCR `…-web` | GHCR `…-api` | Images built and pushed by CI |
 
@@ -192,12 +208,11 @@ substituted at container start so one image serves any environment).
 
 Both build from the repository root, because the client imports `../shared`.
 
-`docker-compose.yml` runs api + web + mongo with health-gated startup ordering — a local
-production rehearsal, not a production topology (single replica, no TLS).
+`docker-compose.yml` runs the api + web containers. Supabase PostgreSQL is managed externally,
+so Docker Compose no longer starts a local database.
 
-Note on the API runtime: it is Alpine, and `mongodb-memory-server` ships in `dependencies`
-but cannot run there — no official mongod build for musl. The embedded tier is a dev-machine
-convenience, not a container fallback. See C2.
+The API runtime is Alpine and uses Supabase over HTTPS, so it does not need a database process
+inside the container.
 
 ---
 
@@ -249,28 +264,17 @@ locally, but the first push is the real test of the workflow YAML.
 
 ### Critical
 
-**C1 — Cross-tenant read/write via forged passcode header. *(fixed)***
+**C1 — Cross-tenant read/write via forged Super Admin token. *(fixed)***
 `ownershipMiddleware.ts` treated the mere *presence* of `x-super-admin-token` (header or cookie)
 as superadmin, without verifying the JWT. Any authenticated organizer could send
 `x-super-admin-token: anything` and read or delete another organizer's event — attendee list, CSV
-export, audit log included. Fixed: the bypass now requires a DB-backed `role === 'superadmin'`;
-passcode verification stays in `requireSuperAdmin`. Covered by a regression test that fails
-against the old code.
+export, audit log included. Fixed: the bypass now requires a valid, signed, short-lived
+OTP-issued Super Admin token. Covered by a regression test that fails against the old code.
 
-**C2 — Silent fallback to a non-durable store.**
-`config/db.ts` starts the API successfully on an in-process store when Mongo is unreachable.
-Symptoms: indistinguishable from a working server, `/api/health` still returns `healthy`,
-and all writes vanish on restart. In development this is a feature. In production it converts a
-transient database outage into permanent data loss.
-
-Reproduced in the built image, not argued from reading: `NODE_ENV=production`, no reachable
-Mongo, embedded tier unavailable on Alpine (`Unknown/unsupported linux "alpine"`) — the
-container still came up, answered `/api/health` with `200 healthy`, and accepted writes into
-`memoryDb`. Exactly the failure mode that produces "the event ran fine and now every ticket is
-gone".
-
-Fix: fail closed when `NODE_ENV === 'production'`, report the active store in the health payload,
-and drop `mongodb-memory-server` from production dependencies.
+**C2 — Database readiness must be observable.**
+Supabase PostgreSQL is the required durable store; the API must not be treated as ready merely
+because the process is listening. The health endpoint should include a database readiness check
+and make configuration or connectivity failures visible to the deployment platform.
 
 **C3 — `node_modules` is committed to git (14,779 tracked files).**
 Root cause: `.gitignore` was UTF-16LE, so git never parsed `node_modules/` — verified with
@@ -278,13 +282,11 @@ Root cause: `.gitignore` was UTF-16LE, so git never parsed `node_modules/` — v
 `git rm -r --cached client/node_modules server/node_modules` then commit. Coordinate it — every
 collaborator must re-clone or their next commit resurrects the directory.
 
-**C4 — The super-admin passcode fallback is published in the repo.**
-`getSuperAdminPasscode()` (`superAdminMiddleware.ts:10`) returns
-`process.env.SUPER_ADMIN_PASSWORD || 'GateKeeper#SuperAdmin2026!'`. That literal is the same value
-in `server/.env.example` and in this repository's history (`git log -S` finds it in `c88b0d9`).
-A deployment that forgets the env var is protected by a password anyone reading the repo can see.
-Fix: no default — throw on startup when unset, exactly as `JWT_SECRET` already does in
-`server.ts:96`. Rotate the value wherever it has been used.
+**C4 — OTP delivery and verification state are process-local.**
+The application fails closed when SMTP configuration is missing, and Nodemailer is the sole
+delivery provider. OTP codes and pending registrations remain in process memory, however; a
+restart drops in-flight codes and multiple replicas do not share them. Move these stores and
+the quota to Redis or another shared TTL store before horizontal scaling.
 
 Related, lower severity: an earlier `.env` was committed with a `JWT_SECRET`
 (`gatekeeper_jwt_super_secret_production_key_2026`, removed in `9e79d3e`). It is not the current
@@ -296,22 +298,21 @@ history.
 **M1 — Offline scans become unsyncable once an event ends** (§4). 409 on sync, no recovery path
 in the UI. Fix: allow sync for `ENDED` events while the scan timestamp precedes `endedAt`.
 
-**M2 — OTP state is process memory** (`authRoutes.ts:14-15`). Restart drops in-flight codes;
-two replicas means a 50% chance the verifying instance never saw the code. Expired entries are
-never evicted — unbounded growth. Fix: Redis with TTL, which the stack already runs.
+**M2 — OTP state is process memory** (`authRoutes.ts`, `superAdminRoutes.ts`). Restart drops
+in-flight codes; two replicas may route verification to an instance that never issued the code.
+Expired entries and the shared quota should move to Redis with TTL before multi-instance deploys.
 
 **M3 — Two sources of truth for registration count.** Capacity is reserved against the
-`registeredCount` counter; every read path recomputes from `aggregate`. Drift (a rollback that
-failed mid-flight, a manual delete) makes an event permanently unsellable while the dashboard
-shows free seats. Fix: derive capacity from the attendee collection inside a transaction, or
-reconcile the counter on every list read.
+`registeredCount` counter while some read paths recompute totals. Drift after a failed rollback
+or manual delete can make an event appear sold out or available incorrectly. Fix: derive
+capacity from one transactional source of truth, or reconcile the counter on every list read.
 
-**M4 — Health check proves liveness, not readiness** (`server.ts:74`). It reports nothing about
-the database, the active store tier, or email configuration. Consequence: C2 is invisible, and
-orchestrators keep routing traffic to an instance that cannot persist.
+**M4 — Health check proves liveness, not readiness** (`server.ts`). It should report database
+readiness and SMTP configuration status so orchestrators do not route traffic to an instance
+that cannot persist data or deliver required messages.
 
-**M5 — Client ships one 704 kB bundle.** Verified `vite build`: 704 kB app chunk + 181 kB vendor
-(236 kB gzip). ZXing, the super-admin dashboard, and the scanner all load for a visitor who
+**M5 — Client ships a large shared bundle.** The production build reports a large app/vendor
+chunk. ZXing, the super-admin dashboard, and the scanner all load for a visitor who
 touches nothing but the public registration form. This contradicts the product's own premise —
 door staff run this on a phone, at a venue, on congested mobile data, possibly the moment they
 need offline mode to have already warmed. Route-level `lazy()` and a dynamic ZXing import is the
@@ -332,8 +333,8 @@ attendance records.
   in production is what actually contains the risk.
 - Super-admin token lives in `sessionStorage`/`localStorage`, unlike the main session cookie.
 - No `engines` field; CI pins Node 22 but local contributors are unpinned.
-- `memoryDb.ts` reimplements a Mongo query subset. Every future query feature risks behavioural
-  divergence between dev and production.
+- OTP and rate-limit state is in process memory. Every additional replica or restart can lose
+  in-flight authentication state until these stores use shared TTL-backed storage.
 
 ---
 
@@ -342,19 +343,18 @@ attendance records.
 Ordered by risk removed per hour spent.
 
 **Now (this week)**
-1. Fail closed on production DB connection (C2). ~1 h. Eliminates the only plausible
-   silent data-loss mode.
-2. No default super-admin passcode; fail on startup when unset, and rotate (C4). ~30 min.
-3. Health endpoint reports store tier and DB ping (M4). ~1 h. Makes C2 observable.
-4. Untrack `node_modules` (C3). ~15 min plus coordination.
-5. Sync allowed after `ENDED` with a timestamp bound (M1). ~2 h. Prevents stranded attendance.
+1. Health endpoint reports database readiness and SMTP configuration (C2/M4). ~1 h.
+2. Move OTP and quota state to Redis with TTL (C4/M2). ~3 h. Prerequisite for more than one
+   API replica.
+3. Untrack `node_modules` (C3) if generated dependencies remain in repository history. ~15 min
+   plus coordination.
+4. Sync allowed after `ENDED` with a timestamp bound (M1). ~2 h. Prevents stranded attendance.
 
 **Next (this month)**
-5. Move OTP store to Redis with TTL (M2). ~3 h. Prerequisite for running more than one replica.
-6. Route-level code splitting + lazy camera import (M5). ~4 h. Largest user-visible win.
-7. Capacity via transaction, drop the counter (M3). ~4 h. Removes a whole class of "sold out but
+5. Route-level code splitting + lazy camera import (M5). ~4 h. Largest user-visible win.
+6. Capacity via transaction, drop the counter (M3). ~4 h. Removes a whole class of "sold out but
    not sold out" support tickets.
-8. Test the sync endpoint: concurrent duplicate scans, retry after timeout, post-end sync (M7).
+7. Test the sync endpoint: concurrent duplicate scans, retry after timeout, post-end sync (M7).
    ~4 h.
 
 **Later (this quarter)**
@@ -379,10 +379,9 @@ problem, and it is the part I would defend in a review of a much larger system.
 
 The risk is concentrated in three places, and none of them are the code:
 
-1. **Configuration decides the architecture.** The DB tier ladder and the passcode default mean
-   a production deploy can be running something nobody intended and report itself healthy.
-   The distance between "works on my machine" and "silently losing writes in production" is one
-   unset environment variable.
+1. **Configuration decides the architecture.** Supabase and Gmail SMTP are required production
+   dependencies. The distance between "works on my machine" and a working deployment is the
+   completeness of `SUPABASE_*`, `SMTP_*`, `JWT_SECRET`, and `SUPER_ADMIN_EMAIL`.
 2. **The single-instance assumption is load-bearing and undocumented.** Rate limiters, OTP
    codes, and any in-memory state mean the horizontal-scaling story is "don't". That's a fine
    choice for this product size — it just has to be written down so nobody scales it and
@@ -391,13 +390,12 @@ The risk is concentrated in three places, and none of them are the code:
    lines, one 704 kB bundle. Nothing here is unsalvageable; it's the shape that makes features
    slower to add over time.
 
-What I'd cut if it were mine: the `memoryDb.ts` reimplementation. It exists to make `npm run dev`
-need zero setup, and the embedded `MongoMemoryServer` tier already delivers that with the real
-engine. Two substitutes for the same problem is one too many, and only one of them can drift.
+What I'd address first: move OTP and rate-limit state out of process memory and add readiness
+checks for the database and SMTP configuration. Those changes preserve the current simple
+deployment model while removing the main operational risks.
 
-Verdict: a genuinely well-reasoned backend core with a hardening backlog, not a rewrite. The
-four "Now" items are the difference between a demo that impresses and a system I'd let run a
-real door.
+Verdict: a well-reasoned backend core with a hardening backlog, not a rewrite. The "Now" items
+are the difference between a demo that impresses and a system I'd let run a real door.
 
 ---
 

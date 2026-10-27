@@ -1,22 +1,45 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { api } from '../api/apiClient.js';
 import { IAuditLog } from '../../../shared/types.js';
-import {
-  ArrowLeftIcon,
-  FilterIcon,
-  ShieldCheckIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  RepeatIcon,
-  XCircleIcon,
-  UndoIcon,
-  CloudSyncIcon,
-} from '../components/icons/CustomIcons.js';
 
 interface AuditLogViewProps {
   eventId: string;
   onBack: () => void;
 }
+
+const btnSoft =
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-[#f0f3f2] px-4 py-2 text-sm font-medium text-stone-700 transition hover:bg-[#e6ebe9] disabled:opacity-40';
+
+// Plain-language label + soft pill colour for each action. Unknown actions fall back to the raw name.
+const actionMeta: Record<string, { label: string; cls: string }> = {
+  CHECK_IN: { label: 'Checked in', cls: 'bg-emerald-100 text-emerald-800' },
+  DUPLICATE_CHECK_IN: { label: 'Duplicate scan', cls: 'bg-amber-100 text-amber-800' },
+  INVALID_CHECK_IN: { label: 'Invalid ticket', cls: 'bg-red-100 text-red-800' },
+  UNDO_CHECK_IN: { label: 'Check-in undone', cls: 'bg-[#dcd7fb] text-stone-800' },
+  OFFLINE_SCAN_SYNCED: { label: 'Offline scan synced', cls: 'bg-sky-100 text-sky-800' },
+  OFFLINE_SCAN_REJECTED: { label: 'Offline scan rejected', cls: 'bg-red-100 text-red-800' },
+  REGISTER_ATTENDEE: { label: 'Registered', cls: 'bg-[#eefbc4] text-stone-800' },
+  START_EVENT: { label: 'Event started', cls: 'bg-stone-100 text-stone-700' },
+  END_EVENT: { label: 'Event ended', cls: 'bg-stone-100 text-stone-700' },
+  CREATE_EVENT: { label: 'Event created', cls: 'bg-stone-100 text-stone-700' },
+  PUBLISH_EVENT: { label: 'Event published', cls: 'bg-stone-100 text-stone-700' },
+};
+
+const filterOptions: { value: string; label: string }[] = [
+  { value: 'ALL', label: 'All actions' },
+  { value: 'CHECK_IN', label: 'Checked in' },
+  { value: 'DUPLICATE_CHECK_IN', label: 'Duplicate scans' },
+  { value: 'INVALID_CHECK_IN', label: 'Invalid tickets' },
+  { value: 'UNDO_CHECK_IN', label: 'Check-ins undone' },
+  { value: 'REGISTER_ATTENDEE', label: 'Registrations' },
+  { value: 'OFFLINE_SCAN_SYNCED', label: 'Offline scans synced' },
+  { value: 'OFFLINE_SCAN_REJECTED', label: 'Offline scans rejected' },
+  { value: 'START_EVENT', label: 'Event started' },
+  { value: 'END_EVENT', label: 'Event ended' },
+  { value: 'CREATE_EVENT', label: 'Event created' },
+  { value: 'PUBLISH_EVENT', label: 'Event published' },
+];
 
 export const AuditLogView: React.FC<AuditLogViewProps> = ({ eventId, onBack }) => {
   const [logs, setLogs] = useState<IAuditLog[]>([]);
@@ -48,117 +71,94 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ eventId, onBack }) =
     fetchLogs();
   }, [fetchLogs]);
 
-  const getActionBadge = (action: string) => {
-    switch (action) {
-      case 'CHECK_IN':
-        return <span className="px-2 py-0.5 rounded bg-signal-green/15 text-signal-green border border-signal-green/30 font-semibold text-[10px]">CHECK_IN</span>;
-      case 'DUPLICATE_CHECK_IN':
-        return <span className="px-2 py-0.5 rounded bg-signal-amber/15 text-signal-amber border border-signal-amber/30 font-semibold text-[10px]">DUPLICATE_SCAN</span>;
-      case 'INVALID_CHECK_IN':
-        return <span className="px-2 py-0.5 rounded bg-signal-red/15 text-signal-red border border-signal-red/30 font-semibold text-[10px]">INVALID_ATTEMPT</span>;
-      case 'UNDO_CHECK_IN':
-        return <span className="px-2 py-0.5 rounded bg-brand-purple/20 text-brand-purple border border-brand-purple/40 font-semibold text-[10px]">UNDO_CHECK_IN</span>;
-      case 'OFFLINE_SCAN_SYNCED':
-        return <span className="px-2 py-0.5 rounded bg-brand-blue/20 text-brand-cyan border border-brand-blue/30 font-semibold text-[10px]">OFFLINE_SYNC</span>;
-      case 'REGISTER_ATTENDEE':
-        return <span className="px-2 py-0.5 rounded bg-brand-pink/20 text-brand-pink border border-brand-pink/30 font-semibold text-[10px]">REGISTER</span>;
-      default:
-        return <span className="px-2 py-0.5 rounded bg-surface-subtle text-gray-300 border border-surface-border text-[10px] font-mono">{action}</span>;
-    }
+  const getActionPill = (action: string) => {
+    const meta = actionMeta[action];
+    return (
+      <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${meta ? meta.cls : 'bg-stone-100 text-stone-600'}`}>
+        {meta ? meta.label : action}
+      </span>
+    );
   };
 
+  const hasMetadata = (log: IAuditLog) => !!log.metadata && Object.keys(log.metadata).length > 0;
+
   return (
-    <div className="page-shell text-gray-100 p-4 sm:p-8 flex flex-col items-center">
-      <div className="max-w-5xl w-full space-y-6">
+    <div className="min-h-screen bg-[#e4e8e7] p-0 text-stone-900 sm:p-6">
+      <div className="mx-auto min-h-screen max-w-5xl bg-[#f1f5f4] px-4 py-6 sm:min-h-[calc(100vh-3rem)] sm:rounded-[28px] sm:px-8 sm:py-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-surface-border">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onBack}
-              className="p-2 rounded-lg bg-surface-subtle border border-surface-border text-gray-300 hover:text-white transition-colors"
-            >
-              <ArrowLeftIcon size={18} />
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <button onClick={onBack} className="mb-3 inline-flex items-center gap-2 text-sm text-stone-600 hover:text-stone-900">
+              <ArrowLeft size={15} /> Back to dashboard
             </button>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                <span>Operational Audit Trail</span>
-                <span className="text-xs px-2 py-0.5 rounded bg-surface-subtle border border-surface-border text-gray-400 font-mono">
-                  Append-Only
-                </span>
-              </h1>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Immutable security & event history ({totalLogs} recorded events)
-              </p>
-            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Audit log</h1>
+            <p className="mt-0.5 text-sm text-stone-500">
+              {totalLogs} recorded {totalLogs === 1 ? 'action' : 'actions'} on this event. Entries can't be edited or deleted.
+            </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              value={actionFilter}
-              onChange={(e) => {
-                setActionFilter(e.target.value);
-                setPage(1);
-              }}
-              className="input-dark py-2 text-xs w-48 bg-surface-subtle"
-            >
-              <option value="ALL">All Actions</option>
-              <option value="CHECK_IN">CHECK_IN</option>
-              <option value="DUPLICATE_CHECK_IN">DUPLICATE_CHECK_IN</option>
-              <option value="INVALID_CHECK_IN">INVALID_CHECK_IN</option>
-              <option value="UNDO_CHECK_IN">UNDO_CHECK_IN</option>
-              <option value="REGISTER_ATTENDEE">REGISTER_ATTENDEE</option>
-              <option value="OFFLINE_SCAN_SYNCED">OFFLINE_SCAN_SYNCED</option>
-              <option value="OFFLINE_SCAN_REJECTED">OFFLINE_SCAN_REJECTED</option>
-              <option value="START_EVENT">START_EVENT</option>
-              <option value="END_EVENT">END_EVENT</option>
-              <option value="CREATE_EVENT">CREATE_EVENT</option>
-              <option value="PUBLISH_EVENT">PUBLISH_EVENT</option>
-            </select>
-          </div>
+          <select
+            value={actionFilter}
+            onChange={(e) => {
+              setActionFilter(e.target.value);
+              setPage(1);
+            }}
+            aria-label="Filter by action"
+            className="w-full rounded-xl border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-stone-900 focus:border-stone-400 focus:outline-none sm:w-56"
+          >
+            {filterOptions.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Audit Log Table */}
-        <div className="panel p-4">
+        {/* Table */}
+        <div className="mt-6 rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(20,30,25,0.04)]">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="border-b border-surface-border text-gray-400 uppercase tracking-wider font-semibold">
-                <tr>
-                  <th className="py-2.5 px-3">Timestamp</th>
-                  <th className="py-2.5 px-3">Action</th>
-                  <th className="py-2.5 px-3">Attendee / Target</th>
-                  <th className="py-2.5 px-3">Ticket Code</th>
-                  <th className="py-2.5 px-3">Metadata</th>
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-stone-200 text-xs text-stone-400">
+                  <th className="py-3 pr-4 font-medium">When</th>
+                  <th className="py-3 pr-4 font-medium">Action</th>
+                  <th className="py-3 pr-4 font-medium">Guest</th>
+                  <th className="hidden py-3 pr-4 font-medium sm:table-cell">Ticket</th>
+                  <th className="hidden py-3 font-medium md:table-cell">Details</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-surface-border text-gray-300">
+              <tbody className="divide-y divide-stone-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-gray-500">
-                      <div className="w-6 h-6 border-2 border-brand-blue border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-                      <span>Loading audit entries...</span>
-                    </td>
+                    <td colSpan={5} className="py-14 text-center text-stone-400">Loading…</td>
                   </tr>
                 ) : logs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-gray-500">
-                      No audit events recorded for this filter.
+                    <td colSpan={5} className="py-14 text-center">
+                      <p className="font-medium text-stone-700">
+                        {actionFilter === 'ALL' ? 'Nothing has been recorded yet.' : 'No entries for this filter.'}
+                      </p>
+                      {actionFilter !== 'ALL' && (
+                        <button onClick={() => { setActionFilter('ALL'); setPage(1); }} className={`${btnSoft} mt-3`}>
+                          Show all actions
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ) : (
                   logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-surface-subtle/50 transition-colors">
-                      <td className="py-3 px-3 font-mono text-gray-400 whitespace-nowrap">
+                    <tr key={log.id} className="hover:bg-[#f7faf9]">
+                      <td className="whitespace-nowrap py-3 pr-4 text-stone-500">
                         {new Date(log.timestamp).toLocaleString()}
                       </td>
-                      <td className="py-3 px-3">{getActionBadge(log.action)}</td>
-                      <td className="py-3 px-3 font-medium text-white">
-                        {log.attendeeName || '—'}
-                      </td>
-                      <td className="py-3 px-3 font-mono text-brand-cyan">
+                      <td className="py-3 pr-4">{getActionPill(log.action)}</td>
+                      <td className="py-3 pr-4 font-medium">{log.attendeeName || '—'}</td>
+                      <td className="hidden py-3 pr-4 font-mono text-xs text-stone-500 sm:table-cell">
                         {log.ticketCode || '—'}
                       </td>
-                      <td className="py-3 px-3 font-mono text-[11px] text-gray-400 max-w-xs truncate">
-                        {JSON.stringify(log.metadata || {})}
+                      <td
+                        className="hidden max-w-xs truncate py-3 font-mono text-xs text-stone-400 md:table-cell"
+                        title={hasMetadata(log) ? JSON.stringify(log.metadata) : undefined}
+                      >
+                        {hasMetadata(log) ? JSON.stringify(log.metadata) : '—'}
                       </td>
                     </tr>
                   ))
@@ -167,25 +167,14 @@ export const AuditLogView: React.FC<AuditLogViewProps> = ({ eventId, onBack }) =
             </table>
           </div>
 
-          {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-4 mt-2 border-t border-surface-border text-xs text-gray-400">
-              <span>
-                Page {page} of {totalPages}
-              </span>
-              <div className="flex gap-1.5">
-                <button
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="btn-secondary py-1 px-3 text-xs disabled:opacity-30"
-                >
+            <div className="mt-3 flex items-center justify-between border-t border-stone-100 pt-4 text-sm text-stone-500">
+              <span>Page {page} of {totalPages}</span>
+              <div className="flex gap-2">
+                <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className={btnSoft}>
                   Previous
                 </button>
-                <button
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="btn-secondary py-1 px-3 text-xs disabled:opacity-30"
-                >
+                <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className={btnSoft}>
                   Next
                 </button>
               </div>

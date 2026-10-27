@@ -1,18 +1,60 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Shield, ShieldAlert, ShieldCheck, Lock, Unlock, Key, Trash2, Users,
-  Calendar, Ticket, Download, Search, RefreshCw, ArrowLeft, ExternalLink,
-  AlertTriangle, Eye, EyeOff, CheckCircle2, XCircle, Database, ChevronRight,
-  Radio, Clock, Activity, FileSpreadsheet
+  AlertTriangle, ArrowLeft, Calendar, CheckCircle2, ChevronRight, Database, ExternalLink,
+  FileSpreadsheet, LayoutDashboard, Lock, Radio, RefreshCw, Search,
+  Ticket, Trash2, Unlock, Users, XCircle,
 } from 'lucide-react';
 import { api } from '../api/apiClient.js';
 import { useAuth } from '../context/AuthContext.js';
+import { BrandLogo } from '../components/BrandLogo.js';
 
 interface SuperAdminDashboardProps {
   onBackToDashboard: () => void;
   onNavigateToLiveMode: (eventId: string) => void;
   onNavigateToSummary: (eventId: string) => void;
 }
+
+/* Same look as the organizer dashboard: standard Tailwind + a few hex colours, no config changes. */
+const BRAND_ACCENT = 'brand-gradient text-white hover:brightness-110';
+const field =
+  'w-full rounded-xl border border-stone-200 bg-[#f4f7f6] px-3.5 py-2.5 text-sm text-stone-900 placeholder:text-stone-400 focus:border-stone-400 focus:bg-white focus:outline-none';
+const btnBrand = `inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50 ${BRAND_ACCENT}`;
+const btnSoft =
+  'inline-flex items-center justify-center gap-2 rounded-xl bg-[#f0f3f2] px-4 py-2.5 text-sm font-medium text-stone-700 transition hover:bg-[#e6ebe9] disabled:opacity-50';
+const panel = 'rounded-2xl bg-white p-5 shadow-[0_1px_2px_rgba(20,30,25,0.04)]';
+const th = 'py-3 pr-4 font-medium';
+const dangerBtn =
+  'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50';
+
+type Tab = 'overview' | 'users' | 'events' | 'registrations';
+
+const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+  { key: 'overview', label: 'Overview', icon: <LayoutDashboard size={17} /> },
+  { key: 'users', label: 'Sign-ups', icon: <Users size={17} /> },
+  { key: 'events', label: 'Events', icon: <Calendar size={17} /> },
+  { key: 'registrations', label: 'Registrations', icon: <Ticket size={17} /> },
+];
+
+const eventStatusPill = (status: string) => {
+  const map: Record<string, string> = {
+    LIVE: 'bg-emerald-100 text-emerald-800',
+    UPCOMING: 'bg-sky-100 text-sky-800',
+    ENDED: 'bg-stone-100 text-stone-600',
+    DRAFT: 'bg-amber-100 text-amber-800',
+  };
+  const label: Record<string, string> = { LIVE: 'Live', UPCOMING: 'Upcoming', ENDED: 'Ended', DRAFT: 'Draft' };
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${map[status] || map.DRAFT}`}>
+      {label[status] || status}
+    </span>
+  );
+};
+
+const rolePill = (role: string) => (
+  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${role === 'superadmin' ? 'bg-amber-100 text-amber-800' : 'bg-stone-100 text-stone-600'}`}>
+    {role === 'superadmin' ? 'Super admin' : role}
+  </span>
+);
 
 export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   onBackToDashboard,
@@ -21,18 +63,17 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
 }) => {
   const { organizer } = useAuth();
 
-  // ── Authentication & Gatekeeper State ──
-  const [isUnlocked, setIsUnlocked] = useState<boolean>(false);
-  const [passcode, setPasscode] = useState('');
-  const [showPasscode, setShowPasscode] = useState(false);
-  const [passcodeError, setPasscodeError] = useState<string | null>(null);
+  // ── Unlock state ──
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
 
-  // ── Navigation Tabs ──
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'events' | 'registrations' | 'security'>('overview');
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
 
-  // ── Data States ──
+  // ── Data ──
   const [overviewData, setOverviewData] = useState<any>(null);
   const [loadingOverview, setLoadingOverview] = useState(false);
 
@@ -44,15 +85,14 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventSearch, setEventSearch] = useState('');
   const [eventStatusFilter, setEventStatusFilter] = useState('ALL');
-  const [eventOrganizerFilter, setEventOrganizerFilter] = useState('');
+  const [eventOrganizerFilter] = useState('');
 
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [loadingRegistrations, setLoadingRegistrations] = useState(false);
   const [regSearch, setRegSearch] = useState('');
   const [regStatusFilter, setRegStatusFilter] = useState('ALL');
-  const [regEventFilter, setRegEventFilter] = useState('');
+  const [regEventFilter] = useState('');
 
-  // ── Modals & Action States ──
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'user' | 'event' | 'registration';
     id: string;
@@ -67,14 +107,11 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     setTimeout(() => setToastMessage(null), 4500);
   };
 
-  // ── Check if Super Admin session is already active on mount ──
   useEffect(() => {
     const checkStatus = async () => {
       try {
         const res = await api.getSuperAdminStatus();
-        if (res.unlocked) {
-          setIsUnlocked(true);
-        }
+        if (res.unlocked) setIsUnlocked(true);
       } catch {
         setIsUnlocked(false);
       } finally {
@@ -84,48 +121,56 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     checkStatus();
   }, []);
 
-  // ── Unlock Super Admin with unique password ──
-  const handleUnlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!passcode.trim()) {
-      setPasscodeError('Please enter the Super Admin passcode.');
-      return;
-    }
-
+  const handleRequestOtp = async () => {
     setVerifying(true);
-    setPasscodeError(null);
-
+    setOtpError(null);
     try {
-      const res = await api.verifySuperAdminPasscode(passcode.trim());
-      if (res.success) {
-        setIsUnlocked(true);
-        setPasscode('');
-        showToast('Super Admin access authenticated successfully.');
-      } else {
-        setPasscodeError('Incorrect passcode. Super Admin access denied.');
-      }
+      await api.requestSuperAdminOtp();
+      setOtpSent(true);
+      showToast('OTP sent to the configured Super Admin email.');
     } catch (err: any) {
-      setPasscodeError(err.message || 'Passcode verification failed.');
+      setOtpError(err.message || 'Could not send the Super Admin OTP.');
     } finally {
       setVerifying(false);
     }
   };
 
-  // ── Lock Super Admin session ──
+  const handleUnlock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otp.trim()) {
+      setOtpError('Enter the OTP sent to the Super Admin email.');
+      return;
+    }
+    setVerifying(true);
+    setOtpError(null);
+    try {
+      const res = await api.verifySuperAdminOtp(otp.trim());
+      if (res.success) {
+        setIsUnlocked(true);
+        setOtp('');
+        showToast('Unlocked.');
+      } else {
+        setOtpError('That OTP is incorrect.');
+      }
+    } catch (err: any) {
+      setOtpError(err.message || 'Could not verify the OTP.');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
   const handleLock = () => {
     api.lockSuperAdmin();
     setIsUnlocked(false);
-    showToast('Super Admin session locked securely.');
+    showToast('Session locked.');
   };
 
-  // ── Fetchers ──
   const fetchOverview = useCallback(async () => {
     setLoadingOverview(true);
     try {
-      const data = await api.getSuperAdminOverview();
-      setOverviewData(data);
+      setOverviewData(await api.getSuperAdminOverview());
     } catch (err: any) {
-      showToast(err.message || 'Failed to load metrics', 'error');
+      showToast(err.message || 'Could not load the overview', 'error');
     } finally {
       setLoadingOverview(false);
     }
@@ -137,7 +182,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       const res = await api.getSuperAdminUsers(userSearch);
       setUsers(res.users);
     } catch (err: any) {
-      showToast(err.message || 'Failed to load users', 'error');
+      showToast(err.message || 'Could not load users', 'error');
     } finally {
       setLoadingUsers(false);
     }
@@ -153,7 +198,7 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       });
       setEvents(res.events);
     } catch (err: any) {
-      showToast(err.message || 'Failed to load events', 'error');
+      showToast(err.message || 'Could not load events', 'error');
     } finally {
       setLoadingEvents(false);
     }
@@ -169,13 +214,12 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
       });
       setRegistrations(res.registrations);
     } catch (err: any) {
-      showToast(err.message || 'Failed to load registrations', 'error');
+      showToast(err.message || 'Could not load registrations', 'error');
     } finally {
       setLoadingRegistrations(false);
     }
   }, [regSearch, regStatusFilter, regEventFilter]);
 
-  // Load data when unlocked or tab changes
   useEffect(() => {
     if (!isUnlocked) return;
     if (activeTab === 'overview') fetchOverview();
@@ -184,48 +228,39 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     if (activeTab === 'registrations') fetchRegistrations();
   }, [isUnlocked, activeTab, fetchOverview, fetchUsers, fetchEvents, fetchRegistrations]);
 
-  // ── Handle Deletions ──
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
-
     try {
       if (deleteTarget.type === 'user') {
         const res = await api.deleteSuperAdminUser(deleteTarget.id);
         showToast(res.message);
         fetchUsers();
-        if (activeTab === 'overview') fetchOverview();
       } else if (deleteTarget.type === 'event') {
         const res = await api.deleteSuperAdminEvent(deleteTarget.id);
         showToast(res.message);
         fetchEvents();
-        if (activeTab === 'overview') fetchOverview();
-      } else if (deleteTarget.type === 'registration') {
+      } else {
         const res = await api.deleteSuperAdminRegistration(deleteTarget.id);
         showToast(res.message);
         fetchRegistrations();
-        if (activeTab === 'overview') fetchOverview();
       }
+      if (activeTab === 'overview') fetchOverview();
       setDeleteTarget(null);
     } catch (err: any) {
-      showToast(err.message || 'Deletion failed', 'error');
+      showToast(err.message || 'Delete failed', 'error');
     } finally {
       setDeleting(false);
     }
   };
 
-  // ── CSV Export ──
   const handleExport = (type: 'users' | 'events' | 'registrations') => {
     const token =
       sessionStorage.getItem('gatekeeper_superadmin_token') ||
       localStorage.getItem('gatekeeper_superadmin_token') ||
       '';
-
-    const url = `/api/super-admin/export/${type}`;
-    fetch(url, {
-      headers: {
-        'x-super-admin-token': token,
-      },
+    fetch(`/api/super-admin/export/${type}`, {
+      headers: { 'x-super-admin-token': token },
       credentials: 'include',
     })
       .then((res) => {
@@ -240,125 +275,77 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
         document.body.appendChild(a);
         a.click();
         a.remove();
-        showToast(`Exported ${type} successfully as CSV.`);
+        showToast(`Exported ${type} as CSV.`);
       })
-      .catch((err) => {
-        showToast(err.message || 'Export failed', 'error');
-      });
+      .catch((err) => showToast(err.message || 'Export failed', 'error'));
   };
 
-  // ── Render Loading Screen ──
+  const refreshCurrent = () => {
+    if (activeTab === 'overview') fetchOverview();
+    if (activeTab === 'users') fetchUsers();
+    if (activeTab === 'events') fetchEvents();
+    if (activeTab === 'registrations') fetchRegistrations();
+  };
+
+  const toast = toastMessage && (
+    <div
+      role="status"
+      className={`fixed right-4 top-4 z-50 flex max-w-sm items-center gap-2.5 rounded-xl px-4 py-3 text-sm shadow-lg ${
+        toastMessage.type === 'error' ? 'bg-red-700 text-white' : 'bg-stone-900 text-white'
+      }`}
+    >
+      {toastMessage.type === 'error' ? <AlertTriangle size={16} /> : <CheckCircle2 size={16} />}
+      {toastMessage.text}
+    </div>
+  );
+
+  // ── Checking ──
   if (checkingStatus) {
     return (
-      <div className="min-h-screen bg-[#060918] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-slate-400 font-mono tracking-wider">Verifying Super Admin clearance...</span>
+      <div className="flex min-h-screen items-center justify-center bg-[#e4e8e7] text-stone-900">
+        <div className="flex items-center gap-3 text-sm text-stone-500">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-400 border-t-transparent" />
+          Checking access…
         </div>
       </div>
     );
   }
 
-  // ── Render Unlock Passcode Modal if Locked ──
+  // ── Locked ──
   if (!isUnlocked) {
     return (
-      <div className="min-h-screen bg-[#060918] bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(99,102,241,0.18),rgba(255,255,255,0))] flex flex-col items-center justify-center p-4">
-        {/* Toast */}
-        {toastMessage && (
-          <div className={`fixed top-6 right-6 z-50 px-4 py-3 rounded-xl border shadow-2xl flex items-center gap-2.5 text-sm font-medium ${
-            toastMessage.type === 'error'
-              ? 'bg-rose-950/90 text-rose-200 border-rose-800'
-              : 'bg-emerald-950/90 text-emerald-200 border-emerald-800'
-          }`}>
-            {toastMessage.type === 'error' ? <AlertTriangle className="w-4 h-4 text-rose-400" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-            {toastMessage.text}
-          </div>
-        )}
-
-        <div className="w-full max-w-md">
-          {/* Back button */}
-          <button
-            onClick={onBackToDashboard}
-            className="mb-6 flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" /> Return to Organizer Dashboard
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#e4e8e7] p-4 text-stone-900">
+        {toast}
+        <div className="w-full max-w-sm">
+          <button onClick={onBackToDashboard} className="mb-4 flex items-center gap-2 text-sm text-stone-600 hover:text-stone-900">
+            <ArrowLeft size={15} /> Back to dashboard
           </button>
-
-          {/* Gatekeeper Card */}
-          <div className="bg-[#0c102a]/95 border border-indigo-500/30 rounded-2xl p-7 shadow-2xl backdrop-blur-xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-
-            <div className="flex items-center gap-3.5 mb-6">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-600/30 border border-indigo-500/40 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-                <ShieldAlert className="w-6 h-6 text-indigo-400" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
-                  Super Admin Terminal
-                </h1>
-                <p className="text-xs text-slate-400">Restricted elevated platform command center</p>
-              </div>
+          <div className="rounded-3xl bg-white p-7 shadow-[0_1px_2px_rgba(20,30,25,0.06)]">
+            <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl brand-gradient">
+              <Lock size={20} />
             </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed mb-6 bg-slate-900/60 p-3.5 rounded-xl border border-white/5">
-              Super Admin grants unrestricted authority across all organizers, events, and attendee registrations. Please enter your secret master key to unlock.
+            <h1 className="text-xl font-bold tracking-tight">Super admin</h1>
+            <p className="mt-1 text-sm text-stone-500">
+              This area covers every organizer, event and registration on the platform. Verify the OTP sent to the configured Super Admin email to continue.
             </p>
-
-            <form onSubmit={handleUnlock} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">
-                  Master Security Passcode
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPasscode ? 'text' : 'password'}
-                    value={passcode}
-                    onChange={(e) => setPasscode(e.target.value)}
-                    placeholder="Enter Super Admin Password"
-                    autoFocus
-                    className="w-full px-4 py-3 bg-[#070b1e] border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all pr-10 font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPasscode(!showPasscode)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors"
-                  >
-                    {showPasscode ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                {passcodeError && (
-                  <p className="mt-2 text-xs text-rose-400 flex items-center gap-1.5">
-                    <XCircle className="w-3.5 h-3.5 flex-shrink-0" /> {passcodeError}
-                  </p>
-                )}
-              </div>
-
-              <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-3 text-[11px] text-indigo-300 leading-relaxed">
-                <div className="font-semibold text-indigo-200 flex items-center gap-1.5 mb-1">
-                  <Key className="w-3.5 h-3.5 text-indigo-400" /> Default Passcode Info
-                </div>
-                Configured via <code className="bg-black/40 px-1 py-0.5 rounded text-white font-mono">SUPER_ADMIN_PASSWORD</code> in <code className="bg-black/40 px-1 py-0.5 rounded text-white font-mono">.env</code>.
-                <br />
-                Default password: <strong className="text-white font-mono select-all">GateKeeper#SuperAdmin2026!</strong>
-              </div>
-
-              <button
-                type="submit"
-                disabled={verifying}
-                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold text-sm transition-all shadow-lg shadow-indigo-500/25 flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {verifying ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Verifying Clearance...</span>
-                  </>
-                ) : (
-                  <>
-                    <Unlock className="w-4 h-4" />
-                    <span>Unlock Super Admin Dashboard</span>
-                  </>
-                )}
+            {!otpSent && (
+              <button type="button" onClick={handleRequestOtp} disabled={verifying} className={`${btnBrand} mt-6 w-full`}>
+                <Unlock size={15} /> {verifying ? 'Sending…' : 'Send OTP'}
               </button>
+            )}
+            <form onSubmit={handleUnlock} className="mt-6 space-y-4">
+              {otpSent && <label className="block text-sm">
+                <span className="mb-1 block font-medium">One-time password</span>
+                <input type="text" inputMode="numeric" autoComplete="one-time-code" value={otp} onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} autoFocus className={`${field} font-mono tracking-[0.35em]`} />
+              </label>}
+              {otpError && (
+                <p className="flex items-center gap-1.5 text-sm text-red-700">
+                  <XCircle size={14} className="shrink-0" /> {otpError}
+                </p>
+              )}
+              {otpSent && <><button type="submit" disabled={verifying} className={`${btnBrand} w-full`}>
+                <Unlock size={15} /> {verifying ? 'Checking…' : 'Verify OTP'}
+              </button><button type="button" onClick={handleRequestOtp} disabled={verifying} className="w-full text-sm text-stone-500 hover:text-stone-900">Send a new code</button></>}
             </form>
           </div>
         </div>
@@ -366,751 +353,470 @@ export const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({
     );
   }
 
-  // ── Render Unlocked Super Admin Dashboard ──
+  // ── Unlocked ──
+  const m = overviewData?.metrics;
+  const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const activeLabel = tabs.find((t) => t.key === activeTab)?.label;
+
+  const navItem = (active: boolean) =>
+    `flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition ${active ? BRAND_ACCENT : 'text-stone-600 hover:bg-[#f0f3f2]'}`;
+
+  const filterBar = (children: React.ReactNode, exportType: 'users' | 'events' | 'registrations') => (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row">{children}</div>
+      <button onClick={() => handleExport(exportType)} className={btnSoft}>
+        <FileSpreadsheet size={15} /> Export CSV
+      </button>
+    </div>
+  );
+
+  const searchBox = (value: string, set: (v: string) => void, placeholder: string) => (
+    <div className="relative sm:w-72">
+      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+      <input type="text" placeholder={placeholder} value={value} onChange={(e) => set(e.target.value)} className={`${field} pl-9`} />
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-[#060918] text-slate-100 flex flex-col">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className={`fixed top-6 right-6 z-50 px-4 py-3 rounded-xl border shadow-2xl flex items-center gap-2.5 text-sm font-medium animate-slide-up ${
-          toastMessage.type === 'error'
-            ? 'bg-rose-950/95 text-rose-200 border-rose-800'
-            : 'bg-emerald-950/95 text-emerald-200 border-emerald-800'
-        }`}>
-          {toastMessage.type === 'error' ? <AlertTriangle className="w-4 h-4 text-rose-400" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-          {toastMessage.text}
-        </div>
-      )}
-
-      {/* ── Top Navigation Bar ── */}
-      <header className="border-b border-white/10 bg-[#090d22]/90 backdrop-blur-md sticky top-0 z-30 px-4 lg:px-8 py-3.5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 p-0.5 shadow-md shadow-indigo-500/20">
-              <div className="w-full h-full bg-[#0c102a] rounded-[10px] flex items-center justify-center">
-                <Shield className="w-4 h-4 text-indigo-400" />
-              </div>
+    <div className="min-h-screen bg-[#e4e8e7] p-0 text-stone-900 lg:p-6">
+      {toast}
+      <div className="mx-auto flex min-h-screen max-w-[1440px] overflow-hidden bg-[#f1f5f4] lg:min-h-[calc(100vh-3rem)] lg:rounded-[28px]">
+        {/* Sidebar */}
+        <aside className="hidden w-60 shrink-0 flex-col bg-white/60 px-4 py-6 lg:flex">
+          <div className="mb-8 px-2">
+            <div className="flex items-center gap-2.5">
+              <BrandLogo className="h-8 w-8 rounded-lg" />
+              <span className="text-lg font-bold tracking-tight">GateKeeper</span>
             </div>
+            <span className="mt-2 inline-block rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">Super admin</span>
+          </div>
+          <nav className="space-y-1">
+            {tabs.map((t) => (
+              <button key={t.key} onClick={() => setActiveTab(t.key)} className={navItem(activeTab === t.key)}>
+                {t.icon} {t.label}
+              </button>
+            ))}
+          </nav>
+          <div className="mt-auto space-y-1 pt-6">
+            <button onClick={onBackToDashboard} className={navItem(false)}><ArrowLeft size={17} /> Organizer dashboard</button>
+            <button onClick={handleLock} className="flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-red-700 transition hover:bg-red-50">
+              <Lock size={17} /> Lock session
+            </button>
+            {organizer?.name && <p className="truncate px-3.5 pt-3 text-xs text-stone-500">Signed in as {organizer.name}</p>}
+          </div>
+        </aside>
+
+        {/* Main */}
+        <div className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:py-7">
+          {/* Mobile bar */}
+          <div className="mb-5 flex items-center justify-between lg:hidden">
+            <span className="text-lg font-bold tracking-tight">GateKeeper <span className="text-sm font-medium text-amber-700">· Super admin</span></span>
+            <div className="flex items-center gap-3 text-sm text-stone-600">
+              <button onClick={onBackToDashboard}>Back</button>
+              <button onClick={handleLock} className="text-red-700">Lock</button>
+            </div>
+          </div>
+          <div className="-mx-1 mb-5 flex gap-1 overflow-x-auto px-1 lg:hidden">
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                className={`shrink-0 rounded-xl px-3.5 py-2 text-sm font-medium ${activeTab === t.key ? BRAND_ACCENT : 'bg-white text-stone-600'}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <header className="flex items-start justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-white text-base tracking-tight">GateKeeper</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black tracking-widest uppercase bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/40">
-                  SUPER ADMIN
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400">Global System Management & Oversight</p>
+              <h1 className="text-2xl font-bold tracking-tight">{activeLabel}</h1>
+              <p className="mt-0.5 text-sm text-stone-500">{today}</p>
             </div>
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={onBackToDashboard}
-              className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white transition-all flex items-center gap-2"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Organizer Dashboard</span>
+            <button onClick={refreshCurrent} className={btnSoft} aria-label="Refresh">
+              <RefreshCw size={15} /> <span className="hidden sm:inline">Refresh</span>
             </button>
+          </header>
 
-            <button
-              onClick={handleLock}
-              className="px-3.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 hover:text-rose-200 text-xs font-semibold transition-all flex items-center gap-1.5"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Lock Session</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* ── Main Content Area ── */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 lg:px-8 py-6 space-y-6">
-
-        {/* ── Global KPI Stats Bar ── */}
-        {overviewData && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-            <div className="bg-[#0d122e] border border-white/10 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-              <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider">Total Sign-ups</span>
-                <Users className="w-4 h-4 text-indigo-400" />
+          {/* Pastel stats */}
+          {m && (
+            <div className="mt-6 grid grid-cols-2 gap-4 xl:grid-cols-4">
+              <div className="rounded-2xl bg-[#dcd7fb] p-5">
+                <p className="text-xs font-medium text-stone-700">Organizers</p>
+                <p className="mt-3 text-3xl font-bold tabular-nums">{m.totalOrganizers}</p>
+                <p className="mt-1 text-xs text-stone-600">Signed up on the platform</p>
               </div>
-              <div className="text-2xl font-black text-white font-mono">
-                {overviewData.metrics.totalOrganizers}
+              <div className="rounded-2xl bg-[#c3dcfb] p-5">
+                <p className="text-xs font-medium text-stone-700">Events</p>
+                <p className="mt-3 flex items-center gap-2 text-3xl font-bold tabular-nums">
+                  {m.totalEvents}
+                  {m.eventsByStatus?.LIVE > 0 && (
+                    <span className="flex items-center gap-1 rounded-full bg-white/70 px-2 py-0.5 text-xs font-medium">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> {m.eventsByStatus.LIVE} live
+                    </span>
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-stone-600">{m.eventsByStatus?.UPCOMING} upcoming · {m.eventsByStatus?.DRAFT} draft</p>
               </div>
-              <div className="text-[11px] text-slate-400 mt-1">Platform organizers/admins</div>
+              <div className="rounded-2xl bg-[#b0e9c9] p-5">
+                <p className="text-xs font-medium text-stone-700">Registrations</p>
+                <p className="mt-3 text-3xl font-bold tabular-nums">{m.totalAttendees}</p>
+                <p className="mt-1 text-xs text-stone-600">Across all events</p>
+              </div>
+              <div className="rounded-2xl bg-[#f6e7a8] p-5">
+                <p className="text-xs font-medium text-stone-700">Checked in</p>
+                <p className="mt-3 text-3xl font-bold tabular-nums">
+                  {m.totalCheckedIn}
+                  <span className="ml-2 text-base font-medium text-stone-600">{m.overallCheckInRate}%</span>
+                </p>
+                <p className="mt-1 text-xs text-stone-600">Admitted across all events</p>
+              </div>
             </div>
+          )}
 
-            <div className="bg-[#0d122e] border border-white/10 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-              <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider">Total Events</span>
-                <Calendar className="w-4 h-4 text-purple-400" />
-              </div>
-              <div className="text-2xl font-black text-white font-mono flex items-center gap-2">
-                {overviewData.metrics.totalEvents}
-                {overviewData.metrics.eventsByStatus.LIVE > 0 && (
-                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-sans font-bold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    {overviewData.metrics.eventsByStatus.LIVE} LIVE
-                  </span>
+          <div className="mt-5 space-y-5">
+            {/* OVERVIEW */}
+            {activeTab === 'overview' && (
+              <>
+                {loadingOverview && !overviewData && (
+                  <div className="flex items-center justify-center gap-2 py-16 text-sm text-stone-500">
+                    <RefreshCw size={15} className="animate-spin" /> Loading…
+                  </div>
                 )}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                {overviewData.metrics.eventsByStatus.UPCOMING} upcoming · {overviewData.metrics.eventsByStatus.DRAFT} draft
-              </div>
-            </div>
-
-            <div className="bg-[#0d122e] border border-white/10 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-              <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider">Total Registers</span>
-                <Ticket className="w-4 h-4 text-cyan-400" />
-              </div>
-              <div className="text-2xl font-black text-white font-mono">
-                {overviewData.metrics.totalAttendees}
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">All attendee registrations</div>
-            </div>
-
-            <div className="bg-[#0d122e] border border-white/10 rounded-2xl p-4 shadow-sm relative overflow-hidden">
-              <div className="flex items-center justify-between text-slate-400 mb-2">
-                <span className="text-xs font-semibold uppercase tracking-wider">Total Check-Ins</span>
-                <Activity className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="text-2xl font-black text-white font-mono flex items-center gap-2">
-                {overviewData.metrics.totalCheckedIn}
-                <span className="text-xs text-slate-400 font-sans font-normal">
-                  ({overviewData.metrics.overallCheckInRate}%)
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-400 mt-1">
-                Verified admissions across all events
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Tabs Navigation Header ── */}
-        <div className="flex items-center justify-between border-b border-white/10 pb-3">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                activeTab === 'overview'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Activity className="w-3.5 h-3.5" />
-              <span>Overview</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('users')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                activeTab === 'users'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>All Sign-Ups ({users.length > 0 ? users.length : '...'})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('events')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                activeTab === 'events'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>All Events ({events.length > 0 ? events.length : '...'})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('registrations')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                activeTab === 'registrations'
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/25'
-                  : 'text-slate-400 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Ticket className="w-3.5 h-3.5" />
-              <span>All Registrations</span>
-            </button>
-          </div>
-
-          <button
-            onClick={() => {
-              if (activeTab === 'overview') fetchOverview();
-              if (activeTab === 'users') fetchUsers();
-              if (activeTab === 'events') fetchEvents();
-              if (activeTab === 'registrations') fetchRegistrations();
-            }}
-            title="Refresh current data"
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white border border-white/5 transition-all"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* ── TAB 1: OVERVIEW & PLATFORM STATUS ── */}
-        {activeTab === 'overview' && (
-          <div className="space-y-6">
-            {loadingOverview && (
-              <div className="p-8 text-center text-slate-400 text-sm flex items-center justify-center gap-2">
-                <RefreshCw className="w-4 h-4 animate-spin text-indigo-400" />
-                Loading platform metrics...
-              </div>
-            )}
-
-            {overviewData && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Recent Sign-ups */}
-                <div className="bg-[#0c102a] border border-white/10 rounded-2xl p-5 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                      <Users className="w-4 h-4 text-indigo-400" /> Recent User Sign-ups
-                    </h3>
-                    <button
-                      onClick={() => setActiveTab('users')}
-                      className="text-xs text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1"
-                    >
-                      View all <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {overviewData.recentSignups.map((user: any) => (
-                      <div
-                        key={user.id}
-                        className="p-3 rounded-xl bg-[#070b1e] border border-white/5 flex items-center justify-between"
-                      >
-                        <div>
-                          <div className="font-semibold text-white text-xs">{user.name}</div>
-                          <div className="text-[11px] text-slate-400 font-mono">{user.email}</div>
-                        </div>
-                        <div className="text-right">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                            user.role === 'superadmin' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-white/10 text-slate-300'
-                          }`}>
-                            {user.role}
-                          </span>
-                          <div className="text-[10px] text-slate-500 mt-1">
-                            {new Date(user.createdAt).toLocaleDateString()}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Recent Events Registered */}
-                <div className="bg-[#0c102a] border border-white/10 rounded-2xl p-5 shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-purple-400" /> Recent Events Registered
-                    </h3>
-                    <button
-                      onClick={() => setActiveTab('events')}
-                      className="text-xs text-purple-400 hover:text-purple-300 font-medium flex items-center gap-1"
-                    >
-                      View all <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-2.5">
-                    {overviewData.recentEvents.map((evt: any) => (
-                      <div
-                        key={evt.id}
-                        className="p-3 rounded-xl bg-[#070b1e] border border-white/5 flex items-center justify-between"
-                      >
-                        <div>
-                          <div className="font-semibold text-white text-xs">{evt.name}</div>
-                          <div className="text-[11px] text-slate-400">
-                            {evt.venue} · {evt.date}
-                          </div>
-                        </div>
-                        <div className="text-right flex items-center gap-3">
-                          <div className="text-right">
-                            <span className="text-xs font-mono font-bold text-white">
-                              {evt.registeredCount}/{evt.capacity}
-                            </span>
-                            <div className="text-[10px] text-slate-500">Registered</div>
-                          </div>
-                          <button
-                            onClick={() => onNavigateToLiveMode(evt.id)}
-                            title="Launch Live Mode"
-                            className="p-1.5 rounded-lg bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600 hover:text-white transition-all text-xs"
-                          >
-                            <Radio className="w-3.5 h-3.5" />
+                {overviewData && (
+                  <>
+                    <div className="grid gap-5 lg:grid-cols-2">
+                      <div className={panel}>
+                        <div className="flex items-center justify-between">
+                          <h2 className="font-semibold">Recent sign-ups</h2>
+                          <button onClick={() => setActiveTab('users')} className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-900">
+                            View all <ChevronRight size={14} />
                           </button>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Storage Engine Status */}
-                <div className="lg:col-span-2 bg-[#0c102a] border border-white/10 rounded-2xl p-5 shadow-sm flex items-center justify-between">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                      <Database className="w-5 h-5 text-emerald-400" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-white flex items-center gap-2">
-                        Active Storage Engine: {overviewData.metrics.storageEngine}
-                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      </div>
-                      <p className="text-xs text-slate-400">Zero data loss persistence configured with instant in-memory cache mirroring.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── TAB 2: ALL USERS / SIGN-UPS ── */}
-        {activeTab === 'users' && (
-          <div className="space-y-4">
-            {/* Filter & Export Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#0c102a] p-3.5 rounded-2xl border border-white/10">
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search user name or email..."
-                  value={userSearch}
-                  onChange={(e) => setUserSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-[#070b1e] border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                <button
-                  onClick={() => handleExport('users')}
-                  className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Export CSV</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Users Table */}
-            <div className="bg-[#0c102a] border border-white/10 rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#070b1e] text-slate-400 uppercase tracking-wider font-semibold border-b border-white/10">
-                    <tr>
-                      <th className="py-3 px-4">User</th>
-                      <th className="py-3 px-4">Role</th>
-                      <th className="py-3 px-4">Signed Up</th>
-                      <th className="py-3 px-4 text-center">Events</th>
-                      <th className="py-3 px-4 text-center">Attendees</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {loadingUsers ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">
-                          <RefreshCw className="w-4 h-4 animate-spin inline-block mr-2 text-indigo-400" />
-                          Loading platform users...
-                        </td>
-                      </tr>
-                    ) : users.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">
-                          No user sign-ups found matching criteria.
-                        </td>
-                      </tr>
-                    ) : (
-                      users.map((u) => (
-                        <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3.5 px-4">
-                            <div className="font-semibold text-white">{u.name}</div>
-                            <div className="text-slate-400 font-mono text-[11px]">{u.email}</div>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              u.role === 'superadmin'
-                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                : 'bg-slate-800 text-slate-300 border border-slate-700'
-                            }`}>
-                              {u.role}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-400 text-[11px]">
-                            {new Date(u.createdAt).toLocaleDateString()}
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-mono font-bold text-white">
-                            {u.eventsCount}
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-mono text-slate-300">
-                            {u.attendeesCount}
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            {u.isCurrentSuperAdmin ? (
-                              <span className="text-[10px] font-semibold text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-lg">
-                                Active Session
-                              </span>
-                            ) : (
-                              <button
-                                onClick={() =>
-                                  setDeleteTarget({
-                                    type: 'user',
-                                    id: u.id,
-                                    name: u.name,
-                                    extraInfo: `This will permanently delete this user account along with their ${u.eventsCount} events and ${u.attendeesCount} attendee registrations.`,
-                                  })
-                                }
-                                title="Delete User & Associated Data"
-                                className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/20 transition-all font-semibold flex items-center gap-1.5 ml-auto"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                                <span>Delete User</span>
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── TAB 3: ALL EVENTS REGISTERED ── */}
-        {activeTab === 'events' && (
-          <div className="space-y-4">
-            {/* Filter & Export Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#0c102a] p-3.5 rounded-2xl border border-white/10">
-              <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search events, venue, organizer..."
-                    value={eventSearch}
-                    onChange={(e) => setEventSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-[#070b1e] border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <select
-                  value={eventStatusFilter}
-                  onChange={(e) => setEventStatusFilter(e.target.value)}
-                  className="w-full sm:w-auto px-3 py-2 bg-[#070b1e] border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="ALL">All Statuses</option>
-                  <option value="LIVE">Live</option>
-                  <option value="UPCOMING">Upcoming</option>
-                  <option value="DRAFT">Draft</option>
-                  <option value="ENDED">Ended</option>
-                </select>
-              </div>
-
-              <button
-                onClick={() => handleExport('events')}
-                className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Export CSV</span>
-              </button>
-            </div>
-
-            {/* Events Table */}
-            <div className="bg-[#0c102a] border border-white/10 rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#070b1e] text-slate-400 uppercase tracking-wider font-semibold border-b border-white/10">
-                    <tr>
-                      <th className="py-3 px-4">Event</th>
-                      <th className="py-3 px-4">Organizer</th>
-                      <th className="py-3 px-4">Date & Venue</th>
-                      <th className="py-3 px-4">Status</th>
-                      <th className="py-3 px-4 text-center">Registrations</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {loadingEvents ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">
-                          <RefreshCw className="w-4 h-4 animate-spin inline-block mr-2 text-indigo-400" />
-                          Loading platform events...
-                        </td>
-                      </tr>
-                    ) : events.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">
-                          No events registered found.
-                        </td>
-                      </tr>
-                    ) : (
-                      events.map((e) => (
-                        <tr key={e.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3.5 px-4">
-                            <div className="font-semibold text-white flex items-center gap-2">
-                              <span>{e.name}</span>
-                              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-400">
-                                {e.prefix}
-                              </span>
+                        <div className="mt-4 space-y-2">
+                          {overviewData.recentSignups.length === 0 && <p className="py-6 text-center text-sm text-stone-500">No sign-ups yet.</p>}
+                          {overviewData.recentSignups.map((user: any) => (
+                            <div key={user.id} className="flex items-center justify-between gap-3 rounded-xl bg-[#f4f7f6] px-4 py-3">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#dcd7fb] text-xs font-bold text-stone-700">
+                                  {(user.name || '?').slice(0, 2).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium">{user.name}</div>
+                                  <div className="truncate text-xs text-stone-500">{user.email}</div>
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                {rolePill(user.role)}
+                                <div className="mt-1 text-xs text-stone-400">{new Date(user.createdAt).toLocaleDateString()}</div>
+                              </div>
                             </div>
-                            <div className="text-slate-400 text-[11px] line-clamp-1">{e.description || 'No description'}</div>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-semibold text-slate-200">{e.organizer.name}</div>
-                            <div className="text-[11px] text-slate-400 font-mono">{e.organizer.email}</div>
-                          </td>
-                          <td className="py-3.5 px-4 text-[11px]">
-                            <div className="text-white font-medium">{e.date} · {e.startTime}</div>
-                            <div className="text-slate-400">{e.venue}</div>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                              e.status === 'LIVE'
-                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                : e.status === 'UPCOMING'
-                                ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                                : e.status === 'ENDED'
-                                ? 'bg-slate-800 text-slate-400'
-                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                            }`}>
-                              {e.status}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-mono">
-                            <div className="text-white font-bold">{e.registeredCount} / {e.capacity}</div>
-                            <div className="text-[10px] text-slate-400">{e.checkedInCount} checked in</div>
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => onNavigateToLiveMode(e.id)}
-                                title="Open Live Check-In"
-                                className="p-1.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/20 transition-all"
-                              >
-                                <Radio className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => onNavigateToSummary(e.id)}
-                                title="View Summary"
-                                className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 transition-all"
-                              >
-                                <ExternalLink className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() =>
-                                  setDeleteTarget({
-                                    type: 'event',
-                                    id: e.id,
-                                    name: e.name,
-                                    extraInfo: `This will permanently delete this event and all ${e.registeredCount} attendee registrations.`,
-                                  })
-                                }
-                                title="Delete Event"
-                                className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 transition-all"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className={panel}>
+                        <div className="flex items-center justify-between">
+                          <h2 className="font-semibold">Recent events</h2>
+                          <button onClick={() => setActiveTab('events')} className="flex items-center gap-1 text-sm text-stone-500 hover:text-stone-900">
+                            View all <ChevronRight size={14} />
+                          </button>
+                        </div>
+                        <div className="mt-4 space-y-2">
+                          {overviewData.recentEvents.length === 0 && <p className="py-6 text-center text-sm text-stone-500">No events yet.</p>}
+                          {overviewData.recentEvents.map((evt: any) => (
+                            <div key={evt.id} className="flex items-center justify-between gap-3 rounded-xl bg-[#f4f7f6] px-4 py-3">
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-medium">{evt.name}</div>
+                                <div className="truncate text-xs text-stone-500">{evt.venue} · {evt.date}</div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-3">
+                                <div className="text-right">
+                                  <div className="text-sm font-semibold tabular-nums">{evt.registeredCount}/{evt.capacity}</div>
+                                  <div className="text-xs text-stone-400">registered</div>
+                                </div>
+                                <button
+                                  onClick={() => onNavigateToLiveMode(evt.id)}
+                                  title="Open scanner"
+                                  aria-label="Open scanner"
+                                  className="rounded-lg bg-white p-2 text-stone-600 transition hover:brightness-110 hover:text-stone-900"
+                                >
+                                  <Radio size={15} />
+                                </button>
+                              </div>
                             </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+                          ))}
+                        </div>
+                      </div>
+                    </div>
 
-        {/* ── TAB 4: ALL REGISTRATIONS (ATTENDEES) ── */}
-        {activeTab === 'registrations' && (
-          <div className="space-y-4">
-            {/* Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#0c102a] p-3.5 rounded-2xl border border-white/10">
-              <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full sm:w-auto">
-                <div className="relative w-full sm:w-72">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search attendee, ticket code, email..."
-                    value={regSearch}
-                    onChange={(e) => setRegSearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 bg-[#070b1e] border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
-                </div>
-
-                <select
-                  value={regStatusFilter}
-                  onChange={(e) => setRegStatusFilter(e.target.value)}
-                  className="w-full sm:w-auto px-3 py-2 bg-[#070b1e] border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-indigo-500"
-                >
-                  <option value="ALL">All Admission Status</option>
-                  <option value="CHECKED_IN">Checked In</option>
-                  <option value="NOT_CHECKED_IN">Pending Check-In</option>
-                </select>
-              </div>
-
-              <button
-                onClick={() => handleExport('registrations')}
-                className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 hover:text-white flex items-center gap-1.5 transition-all"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Export CSV</span>
-              </button>
-            </div>
-
-            {/* Registrations Table */}
-            <div className="bg-[#0c102a] border border-white/10 rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#070b1e] text-slate-400 uppercase tracking-wider font-semibold border-b border-white/10">
-                    <tr>
-                      <th className="py-3 px-4">Attendee</th>
-                      <th className="py-3 px-4">Event</th>
-                      <th className="py-3 px-4">Ticket</th>
-                      <th className="py-3 px-4">Admission</th>
-                      <th className="py-3 px-4">Registered At</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {loadingRegistrations ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">
-                          <RefreshCw className="w-4 h-4 animate-spin inline-block mr-2 text-indigo-400" />
-                          Loading registrations...
-                        </td>
-                      </tr>
-                    ) : registrations.length === 0 ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400">
-                          No attendee registrations found.
-                        </td>
-                      </tr>
-                    ) : (
-                      registrations.map((r) => (
-                        <tr key={r.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3.5 px-4">
-                            <div className="font-semibold text-white">{r.name}</div>
-                            <div className="text-slate-400 font-mono text-[11px]">{r.email}</div>
-                          </td>
-                          <td className="py-3.5 px-4 text-[11px]">
-                            <div className="font-semibold text-slate-200">{r.event.name}</div>
-                            <div className="text-slate-400">{r.event.venue}</div>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="font-mono font-bold text-white text-xs">{r.ticketCode}</div>
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-300">
-                              {r.ticketType}
-                            </span>
-                          </td>
-                          <td className="py-3.5 px-4">
-                            {r.checkedInAt ? (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                                CHECKED IN
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
-                                <Clock className="w-3 h-3 text-slate-400" />
-                                PENDING
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 text-slate-400 text-[11px]">
-                            {new Date(r.registeredAt).toLocaleString()}
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <button
-                              onClick={() =>
-                                setDeleteTarget({
-                                  type: 'registration',
-                                  id: r.id,
-                                  name: `${r.name} (${r.ticketCode})`,
-                                  extraInfo: `This will cancel and remove this attendee registration from event "${r.event.name}".`,
-                                })
-                              }
-                              title="Delete Registration"
-                              className="px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 border border-rose-500/20 transition-all font-semibold flex items-center gap-1.5 ml-auto"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Delete</span>
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-      </main>
-
-      {/* ── Cascade Delete Confirmation Modal ── */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0c102a] border border-rose-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-rose-500" />
-
-            <div className="flex items-center gap-3.5 mb-4 text-rose-400">
-              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-rose-400" />
-              </div>
-              <div>
-                <h3 className="font-bold text-white text-base">
-                  Confirm Permanent Deletion
-                </h3>
-                <p className="text-xs text-rose-400/90 uppercase tracking-wider font-semibold">
-                  Irreversible Super Admin Action
-                </p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-300 mb-3 leading-relaxed">
-              Are you sure you want to delete <strong className="text-white">{deleteTarget.name}</strong>?
-            </p>
-
-            {deleteTarget.extraInfo && (
-              <div className="bg-rose-950/30 border border-rose-900/40 rounded-xl p-3 text-[11px] text-rose-300 mb-5 leading-relaxed">
-                {deleteTarget.extraInfo}
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-3 pt-2 border-t border-white/10">
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={() => setDeleteTarget(null)}
-                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-xs font-semibold text-slate-300 hover:text-white transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={deleting}
-                onClick={confirmDelete}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all shadow-lg shadow-rose-600/30 flex items-center gap-2"
-              >
-                {deleting ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Deleting...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Confirm Delete</span>
+                    <div className="relative overflow-hidden rounded-2xl bg-[#1f8f8a] p-5 text-white">
+                      <div className="pointer-events-none absolute -right-6 -top-6 h-28 w-28 rounded-full bg-white/10" />
+                      <div className="pointer-events-none absolute -bottom-10 right-16 h-24 w-24 rounded-full bg-white/10" />
+                      <div className="relative flex items-center gap-4">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/15">
+                          <Database size={20} />
+                        </div>
+                        <div>
+                          <h2 className="font-semibold">Storage: {m.storageEngine}</h2>
+                          <p className="text-sm text-white/80">All data is saved to this store, with an in-memory copy for speed.</p>
+                        </div>
+                      </div>
+                    </div>
                   </>
                 )}
+              </>
+            )}
+
+            {/* SIGN-UPS */}
+            {activeTab === 'users' && (
+              <div className={panel}>
+                {filterBar(searchBox(userSearch, setUserSearch, 'Search name or email'), 'users')}
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-stone-200 text-xs text-stone-400">
+                        <th className={th}>User</th>
+                        <th className={th}>Role</th>
+                        <th className={`${th} hidden sm:table-cell`}>Signed up</th>
+                        <th className={`${th} text-center`}>Events</th>
+                        <th className={`${th} hidden text-center sm:table-cell`}>Guests</th>
+                        <th className="py-3 text-right font-medium"><span className="sr-only">Actions</span></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {loadingUsers ? (
+                        <tr><td colSpan={6} className="py-12 text-center text-stone-400">Loading…</td></tr>
+                      ) : users.length === 0 ? (
+                        <tr><td colSpan={6} className="py-12 text-center text-stone-500">No users match.</td></tr>
+                      ) : (
+                        users.map((u) => (
+                          <tr key={u.id} className="hover:bg-[#f7faf9]">
+                            <td className="py-3 pr-4">
+                              <div className="flex items-center gap-3">
+                                <div className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#dcd7fb] text-xs font-bold text-stone-700 sm:flex">
+                                  {(u.name || '?').slice(0, 2).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="truncate font-medium">{u.name}</div>
+                                  <div className="truncate text-xs text-stone-500">{u.email}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 pr-4">{rolePill(u.role)}</td>
+                            <td className="hidden py-3 pr-4 text-stone-500 sm:table-cell">{new Date(u.createdAt).toLocaleDateString()}</td>
+                            <td className="py-3 pr-4 text-center font-medium tabular-nums">{u.eventsCount}</td>
+                            <td className="hidden py-3 pr-4 text-center tabular-nums text-stone-600 sm:table-cell">{u.attendeesCount}</td>
+                            <td className="py-3 text-right">
+                              {u.isCurrentSuperAdmin ? (
+                                <span className="text-xs text-stone-400">You</span>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    setDeleteTarget({
+                                      type: 'user',
+                                      id: u.id,
+                                      name: u.name,
+                                      extraInfo: `This permanently deletes the account, along with ${u.eventsCount} event${u.eventsCount === 1 ? '' : 's'} and ${u.attendeesCount} guest registration${u.attendeesCount === 1 ? '' : 's'}.`,
+                                    })
+                                  }
+                                  className={dangerBtn}
+                                >
+                                  <Trash2 size={14} /> Delete
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* EVENTS */}
+            {activeTab === 'events' && (
+              <div className={panel}>
+                {filterBar(
+                  <>
+                    {searchBox(eventSearch, setEventSearch, 'Search event, venue or organizer')}
+                    <select value={eventStatusFilter} onChange={(e) => setEventStatusFilter(e.target.value)} className={`${field} sm:w-40`} aria-label="Filter by status">
+                      <option value="ALL">All statuses</option>
+                      <option value="LIVE">Live</option>
+                      <option value="UPCOMING">Upcoming</option>
+                      <option value="DRAFT">Draft</option>
+                      <option value="ENDED">Ended</option>
+                    </select>
+                  </>,
+                  'events'
+                )}
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-stone-200 text-xs text-stone-400">
+                        <th className={th}>Event</th>
+                        <th className={`${th} hidden md:table-cell`}>Organizer</th>
+                        <th className={`${th} hidden sm:table-cell`}>When and where</th>
+                        <th className={th}>Status</th>
+                        <th className={`${th} text-center`}>Registered</th>
+                        <th className="py-3 text-right font-medium"><span className="sr-only">Actions</span></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {loadingEvents ? (
+                        <tr><td colSpan={6} className="py-12 text-center text-stone-400">Loading…</td></tr>
+                      ) : events.length === 0 ? (
+                        <tr><td colSpan={6} className="py-12 text-center text-stone-500">No events match.</td></tr>
+                      ) : (
+                        events.map((e) => (
+                          <tr key={e.id} className="hover:bg-[#f7faf9]">
+                            <td className="py-3 pr-4">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{e.name}</span>
+                                <span className="rounded bg-stone-100 px-1.5 py-0.5 font-mono text-[10px] text-stone-500">{e.prefix}</span>
+                              </div>
+                              <div className="line-clamp-1 text-xs text-stone-500">{e.description || 'No description'}</div>
+                            </td>
+                            <td className="hidden py-3 pr-4 md:table-cell">
+                              <div className="font-medium">{e.organizer.name}</div>
+                              <div className="text-xs text-stone-500">{e.organizer.email}</div>
+                            </td>
+                            <td className="hidden py-3 pr-4 sm:table-cell">
+                              <div>{e.date} · {e.startTime}</div>
+                              <div className="text-xs text-stone-500">{e.venue}</div>
+                            </td>
+                            <td className="py-3 pr-4">{eventStatusPill(e.status)}</td>
+                            <td className="py-3 pr-4 text-center">
+                              <div className="font-semibold tabular-nums">{e.registeredCount} / {e.capacity}</div>
+                              <div className="text-xs text-stone-500">{e.checkedInCount} in</div>
+                            </td>
+                            <td className="py-3">
+                              <div className="flex items-center justify-end gap-1">
+                                <button onClick={() => onNavigateToLiveMode(e.id)} title="Open scanner" aria-label="Open scanner" className="rounded-lg p-2 text-stone-500 hover:bg-[#f0f3f2] hover:text-stone-900"><Radio size={15} /></button>
+                                <button onClick={() => onNavigateToSummary(e.id)} title="View summary" aria-label="View summary" className="rounded-lg p-2 text-stone-500 hover:bg-[#f0f3f2] hover:text-stone-900"><ExternalLink size={15} /></button>
+                                <button
+                                  onClick={() =>
+                                    setDeleteTarget({
+                                      type: 'event',
+                                      id: e.id,
+                                      name: e.name,
+                                      extraInfo: `This permanently deletes the event and all ${e.registeredCount} guest registration${e.registeredCount === 1 ? '' : 's'}.`,
+                                    })
+                                  }
+                                  title="Delete event"
+                                  aria-label="Delete event"
+                                  className="rounded-lg p-2 text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* REGISTRATIONS */}
+            {activeTab === 'registrations' && (
+              <div className={panel}>
+                {filterBar(
+                  <>
+                    {searchBox(regSearch, setRegSearch, 'Search name, email or ticket')}
+                    <select value={regStatusFilter} onChange={(e) => setRegStatusFilter(e.target.value)} className={`${field} sm:w-44`} aria-label="Filter by check-in status">
+                      <option value="ALL">Everyone</option>
+                      <option value="CHECKED_IN">Checked in</option>
+                      <option value="NOT_CHECKED_IN">Not arrived</option>
+                    </select>
+                  </>,
+                  'registrations'
+                )}
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-stone-200 text-xs text-stone-400">
+                        <th className={th}>Guest</th>
+                        <th className={`${th} hidden md:table-cell`}>Event</th>
+                        <th className={`${th} hidden sm:table-cell`}>Ticket</th>
+                        <th className={th}>Status</th>
+                        <th className={`${th} hidden lg:table-cell`}>Registered</th>
+                        <th className="py-3 text-right font-medium"><span className="sr-only">Actions</span></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-stone-100">
+                      {loadingRegistrations ? (
+                        <tr><td colSpan={6} className="py-12 text-center text-stone-400">Loading…</td></tr>
+                      ) : registrations.length === 0 ? (
+                        <tr><td colSpan={6} className="py-12 text-center text-stone-500">No registrations match.</td></tr>
+                      ) : (
+                        registrations.map((r) => (
+                          <tr key={r.id} className="hover:bg-[#f7faf9]">
+                            <td className="py-3 pr-4">
+                              <div className="font-medium">{r.name}</div>
+                              <div className="text-xs text-stone-500">{r.email}</div>
+                            </td>
+                            <td className="hidden py-3 pr-4 md:table-cell">
+                              <div className="font-medium">{r.event.name}</div>
+                              <div className="text-xs text-stone-500">{r.event.venue}</div>
+                            </td>
+                            <td className="hidden py-3 pr-4 sm:table-cell">
+                              <div className="font-mono text-xs">{r.ticketCode}</div>
+                              <div className="text-xs text-stone-500">{r.ticketType}</div>
+                            </td>
+                            <td className="py-3 pr-4">
+                              {r.checkedInAt ? (
+                                <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">Checked in</span>
+                              ) : (
+                                <span className="inline-flex rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600">Not arrived</span>
+                              )}
+                            </td>
+                            <td className="hidden py-3 pr-4 text-xs text-stone-500 lg:table-cell">{new Date(r.registeredAt).toLocaleString()}</td>
+                            <td className="py-3 text-right">
+                              <button
+                                onClick={() =>
+                                  setDeleteTarget({
+                                    type: 'registration',
+                                    id: r.id,
+                                    name: `${r.name} (${r.ticketCode})`,
+                                    extraInfo: `This removes the guest's registration from "${r.event.name}".`,
+                                  })
+                                }
+                                className={dangerBtn}
+                              >
+                                <Trash2 size={14} /> Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-stone-900/50 p-4" onClick={() => !deleting && setDeleteTarget(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold">Delete {deleteTarget.name}?</h3>
+            {deleteTarget.extraInfo && <p className="mt-2 text-sm text-stone-600">{deleteTarget.extraInfo}</p>}
+            <p className="mt-2 text-sm font-medium text-red-700">This can't be undone.</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button disabled={deleting} onClick={() => setDeleteTarget(null)} className={btnSoft}>Keep it</button>
+              <button
+                disabled={deleting}
+                onClick={confirmDelete}
+                className="inline-flex items-center rounded-xl bg-red-700 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 disabled:opacity-50"
+              >
+                {deleting ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           </div>

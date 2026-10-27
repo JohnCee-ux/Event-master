@@ -1,5 +1,4 @@
 import { Router, Response } from 'express';
-import mongoose from 'mongoose';
 import { z } from 'zod';
 import { Event } from '../models/Event.js';
 import { Attendee } from '../models/Attendee.js';
@@ -31,6 +30,21 @@ const createEventSchema = z.object({
 
 const updateEventSchema = createEventSchema.partial();
 
+const getAttendeeCounts = async (eventIds: any[]): Promise<Map<string, { registeredCount: number; checkedInCount: number }>> => {
+  const attendees: any[] = await Attendee.find({ eventId: { $in: eventIds } }).exec();
+  const countMap = new Map<string, { registeredCount: number; checkedInCount: number }>();
+
+  attendees.forEach((attendee: any) => {
+    const eventId = attendee.eventId.toString();
+    const current = countMap.get(eventId) || { registeredCount: 0, checkedInCount: 0 };
+    current.registeredCount += 1;
+    if (attendee.checkedInAt) current.checkedInCount += 1;
+    countMap.set(eventId, current);
+  });
+
+  return countMap;
+};
+
 // List organizer's events with real-time registered and checkedIn counts
 router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
@@ -38,28 +52,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
     const events: any[] = await Event.find({ organizerId }).sort({ createdAt: -1 }).lean();
 
     const eventIds = events.map((e: any) => e._id);
-
-    // Aggregate registered and checkedIn counts
-    const counts: any[] = await Attendee.aggregate([
-      { $match: { eventId: { $in: eventIds } } },
-      {
-        $group: {
-          _id: '$eventId',
-          registeredCount: { $sum: 1 },
-          checkedInCount: {
-            $sum: { $cond: [{ $ifNull: ['$checkedInAt', false] }, 1, 0] },
-          },
-        },
-      },
-    ]);
-
-    const countMap = new Map<string, { registeredCount: number; checkedInCount: number }>();
-    counts.forEach((c: any) => {
-      countMap.set(c._id.toString(), {
-        registeredCount: c.registeredCount,
-        checkedInCount: c.checkedInCount,
-      });
-    });
+    const countMap = await getAttendeeCounts(eventIds);
 
     const enriched = events.map((evt: any) => {
       const c = countMap.get(evt._id.toString()) || { registeredCount: 0, checkedInCount: 0 };
@@ -144,24 +137,15 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
 router.get('/public', async (_req, res): Promise<void> => {
   try {
     const events: any[] = await Event.find({
-      status: { $in: ['UPCOMING', 'LIVE'] },
+      status: { $in: ['UPCOMING', 'LIVE', 'upcoming', 'live'] },
     })
       .sort({ createdAt: -1 })
       .lean();
 
-    const eventIds = events.map((e: any) => e._id);
-    const counts: any[] = await Attendee.aggregate([
-      { $match: { eventId: { $in: eventIds } } },
-      { $group: { _id: '$eventId', registeredCount: { $sum: 1 } } },
-    ]);
-
-    const countMap = new Map<string, number>();
-    counts.forEach((c: any) => {
-      countMap.set(c._id.toString(), c.registeredCount);
-    });
+    const countMap = await getAttendeeCounts(events.map((e: any) => e._id));
 
     const publicEvents = events.map((evt: any) => {
-      const reg = countMap.get(evt._id.toString()) || 0;
+      const reg = countMap.get(evt._id.toString())?.registeredCount || 0;
       return {
         id: evt._id.toString(),
         name: evt.name,

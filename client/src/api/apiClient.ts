@@ -84,6 +84,24 @@ class ApiClient {
     });
   }
 
+  public async requestRegistrationOtp(data: {
+    name: string;
+    email: string;
+    password: string;
+  }): Promise<{ success: boolean; message: string }> {
+    return this.request('/api/auth/register/request-otp', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public async verifyRegistrationOtp(email: string, otp: string): Promise<{ token: string; organizer: IOrganizer }> {
+    return this.request('/api/auth/register/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    });
+  }
+
   public async loginOrganizer(data: {
     email: string;
     password: string;
@@ -352,10 +370,14 @@ class ApiClient {
   }
 
   // --- Super Admin Endpoints ---
-  public async verifySuperAdminPasscode(passcode: string): Promise<{ success: boolean; message: string; token: string }> {
-    const res = await this.request<{ success: boolean; message: string; token: string }>('/api/super-admin/verify-passcode', {
+  public async requestSuperAdminOtp(): Promise<{ success: boolean; message: string }> {
+    return this.request('/api/super-admin/request-otp', { method: 'POST' });
+  }
+
+  public async verifySuperAdminOtp(otp: string): Promise<{ success: boolean; message: string; token: string }> {
+    const res = await this.request<{ success: boolean; message: string; token: string }>('/api/super-admin/verify-otp', {
       method: 'POST',
-      body: JSON.stringify({ passcode }),
+      body: JSON.stringify({ otp }),
     });
     if (res.token && typeof window !== 'undefined') {
       sessionStorage.setItem('gatekeeper_superadmin_token', res.token);
