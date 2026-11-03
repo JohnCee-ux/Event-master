@@ -158,7 +158,7 @@ router.post('/', rateLimiter_js_1.publicRegisterLimiter, async (req, res) => {
     }
     catch (err) {
         if (err instanceof zod_1.z.ZodError) {
-            res.status(400).json({ error: err.errors[0].message });
+            res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
             return;
         }
         res.status(500).json({ error: err.message || 'Registration failed.' });

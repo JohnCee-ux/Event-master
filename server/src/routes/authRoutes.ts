@@ -113,7 +113,7 @@ router.post('/send-otp', authLimiter, async (req: Request, res: Response): Promi
     });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: err.errors[0].message });
+      res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
       return;
     }
     console.error('Send OTP error:', err);
@@ -160,7 +160,7 @@ router.post('/register/request-otp', authLimiter, async (req: Request, res: Resp
     res.json({ success: true, message: `A verification code was sent to ${email}.` });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: err.errors[0].message });
+      res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
       return;
     }
     console.error('Request registration OTP error:', err);
@@ -217,7 +217,7 @@ router.post('/register/verify-otp', authLimiter, async (req: Request, res: Respo
     });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: err.errors[0].message });
+      res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
       return;
     }
     console.error('Verify registration OTP error:', err);
@@ -262,7 +262,7 @@ router.post('/send-password-reset-otp', authLimiter, async (req: Request, res: R
     });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: err.errors[0].message });
+      res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
       return;
     }
     console.error('Send password reset OTP error:', err);
@@ -309,7 +309,7 @@ router.post('/reset-password', authLimiter, async (req: Request, res: Response):
     res.json({ success: true, message: 'Password reset successfully. You can now sign in.' });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: err.errors[0].message });
+      res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
       return;
     }
     console.error('Reset password error:', err);
@@ -388,7 +388,7 @@ router.post('/verify-otp', authLimiter, async (req: Request, res: Response): Pro
     });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: err.errors[0].message });
+      res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
       return;
     }
     console.error('Verify OTP error:', err);
@@ -442,7 +442,7 @@ router.post('/login', authLimiter, async (req: Request, res: Response): Promise<
     });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: err.errors[0].message });
+      res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
       return;
     }
     res.status(500).json({ error: err.message || 'Login failed.' });
