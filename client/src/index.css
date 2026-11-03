@@ -1839,6 +1839,10 @@ body[data-theme='light'] {
 }
 .public-register-shell .public-register-card {
   position: relative;
+  width: 100%;
+}
+.public-register-shell .public-register-panel {
+  position: relative;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.1);
   border-radius: 1.75rem;
@@ -1846,7 +1850,7 @@ body[data-theme='light'] {
   box-shadow: 0 26px 70px rgba(0,0,0,.42), 0 0 50px rgba(124,58,237,.1);
   backdrop-filter: blur(18px);
 }
-.public-register-shell .public-register-card::before {
+.public-register-shell .public-register-panel::before {
   content: '';
   display: block;
   height: 3px;
@@ -1961,6 +1965,10 @@ body[data-theme='light'] {
   }
 
   .public-register-shell .public-register-card {
+    width: 100%;
+  }
+
+  .public-register-shell .public-register-panel {
     border-radius: 1.25rem;
   }
 

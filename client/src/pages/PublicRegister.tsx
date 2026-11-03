@@ -236,7 +236,7 @@ export const PublicRegister: React.FC<PublicRegisterProps> = ({
 
       <div className="w-full max-w-2xl z-10 public-register-card">
         {ticketResult ? (
-          <div className="bg-slate-900 border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden animate-[slideUp_0.4s_ease-out]">
+          <div className="public-register-panel animate-[slideUp_0.4s_ease-out]">
             <div className="bg-gradient-to-r from-brand-purple to-brand-coral h-1.5" />
             
             <div className="p-4 sm:p-5 text-center border-b border-white/5">
@@ -315,7 +315,7 @@ export const PublicRegister: React.FC<PublicRegisterProps> = ({
             </div>
           </div>
         ) : (
-          <div className="bg-slate-900 border border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl relative overflow-hidden">
+          <div className="public-register-panel">
             
             {/* Tabs */}
             <div className="public-register-tabs flex border-b border-white/5 bg-slate-950/80 p-1 sm:p-1.5 gap-1.5">
