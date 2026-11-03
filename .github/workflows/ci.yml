@@ -39,12 +39,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Cache embedded mongod
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/mongodb-binaries
-          key: ${{ runner.os }}-mongodb-${{ hashFiles('server/package-lock.json') }}
-
       - name: Smoke tests
         run: npm test
 

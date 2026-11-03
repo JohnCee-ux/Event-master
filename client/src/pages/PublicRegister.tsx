@@ -206,7 +206,7 @@ export const PublicRegister: React.FC<PublicRegisterProps> = ({
   return (
     <div className="page-shell public-register-shell min-h-screen text-slate-200 font-sans py-4 sm:py-5 px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-start relative selection:bg-brand-purple/30 selection:text-white">
       {/* Background glow accents */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-brand-purple/10 rounded-full blur-[100px] pointer-events-none" />
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-brand-white/10 rounded-full blur-[100px] pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-brand-coral/10 rounded-full blur-[100px] pointer-events-none" />
 
       {/* Top Navigation Bar */}
@@ -229,7 +229,7 @@ export const PublicRegister: React.FC<PublicRegisterProps> = ({
           <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-lg mx-auto">Choose an event or use the invitation link from your organizer to register in seconds.</p>
           <p className="text-[11px] text-slate-500 mt-1 flex items-center justify-center gap-1.5">
             <MailIcon size={12} className="text-brand-purple-hi shrink-0" />
-            <span>Check your email or SMS for your personalized invite link or event code</span>
+            <span>Check your email  for your QR Code or event code</span>
           </p>
         </div>
       )}

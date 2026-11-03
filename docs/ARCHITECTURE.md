@@ -37,10 +37,13 @@ All file paths in this document are relative to the repository root.
                      Supabase PostgreSQL      Gmail SMTP via Nodemailer
                                               qrcode (ticket image)
 ```
-
-| Component | Owns | Does not own |
-|---|---|---|
-| `client/` | Session state, offline queue, camera scanning, all rendering | Authorisation decisions, capacity, ticket uniqueness |
+```ts
+supabase.rpc('claim_attendee_checkin', {
+   p_attendee_id: attendeeId,
+   p_checked_in_at: checkedInAt,
+   p_checked_in_by: `Offline (${deviceId})`,
+   p_scan_id: scanId
+})
 | `server/` | Identity, tenancy, capacity, ticket issuance, audit trail | Rendering, offline buffering |
 | `shared/types.ts` | Wire contract between the two | Runtime logic |
 | Supabase PostgreSQL | Durable state; constraints enforce registration invariants | — |
@@ -128,13 +131,18 @@ batches the queue to `POST /api/checkins/sync`.
 1. Scans are sorted by capture timestamp before replay, so the earliest scan wins by wall clock
    rather than by upload order.
 2. Timestamps outside ±24 h are rejected — a replay-window bound, not a formality.
-3. Each scan is claimed with a single conditional update:
+3. Each scan is claimed with one atomic PostgreSQL RPC call. The model exposes a
+    Mongoose-shaped `findOneAndUpdate` compatibility method, but it does not use MongoDB:
+    `Attendee.ts` delegates the offline check-in claim to the `claim_attendee_checkin` function
+    defined in `supabase/schema.sql`.
 
-```js
-Attendee.findOneAndUpdate(
-  { _id, checkedInAt: null, offlineScanIds: { $ne: scanId } },
-  { $set: { checkedInAt }, $addToSet: { offlineScanIds: scanId } }
-)
+```ts
+supabase.rpc('claim_attendee_checkin', {
+   p_attendee_id: attendeeId,
+   p_checked_in_at: checkedInAt,
+   p_checked_in_by: `Offline (${deviceId})`,
+   p_scan_id: scanId
+})
 ```
 
 That one statement is the whole idempotency story. A null-claim means either the attendee was
@@ -230,8 +238,8 @@ inside the container.
 `publish` declares `needs: [server, client]`, so an image can only exist for a commit whose
 tests passed. PRs never publish.
 
-`server/test/smoke.test.ts` boots the real server against the embedded-Mongo tier and asserts
-the money path end to end: register organizer → create event → publish → register attendees →
+`server/test/smoke.test.ts` boots the real server against the configured Supabase PostgreSQL
+database and asserts the money path end to end: register organizer → create event → publish → register attendees →
 capacity refusal at the limit → start → check-in → duplicate detection → tenant isolation.
 
 The audit job is deliberately non-blocking. With no fix path for most transitive findings, a red
@@ -249,10 +257,10 @@ This document was written against the code, then checked by executing it:
 |---|---|
 | `tsc --noEmit` over `src` + `test` | clean |
 | `vite build` | clean, 704 kB app + 181 kB vendor chunk |
-| `npm test` (4 smoke tests, embedded Mongo) | 4 passed |
+| `npm test` (4 smoke tests, Supabase PostgreSQL) | 4 passed |
 | Security regression test against pre-fix `ownershipMiddleware` | fails, as intended |
 | `docker build` api + web | both built |
-| api container, `NODE_ENV=production`, no Mongo | started, `uid 1000`, `/api/health` 200 |
+| api container, `NODE_ENV=production`, no local database process | started, `uid 1000`, `/api/health` 200 |
 | web container | SPA fallback 200, `/api` proxy reached the API |
 
 Unverified: the GitHub Actions workflow has not executed on GitHub. It mirrors the commands run

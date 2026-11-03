@@ -79,7 +79,6 @@ describe('GateKeeper API smoke', () => {
         ...process.env,
         NODE_ENV: 'test',
         PORT: String(PORT),
-        MONGO_URI: '',
         JWT_SECRET: 'smoke_test_secret_at_least_32_chars_long',
         SUPER_ADMIN_PASSWORD: 'smoke-test-passcode',
         RESEND_API_KEY: '',
