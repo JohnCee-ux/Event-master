@@ -103,7 +103,7 @@ router.post('/verify-otp', rateLimiter_js_1.authLimiter, authMiddleware_js_1.aut
     }
     catch (err) {
         if (err instanceof zod_1.z.ZodError) {
-            res.status(400).json({ error: err.errors[0].message });
+            res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
             return;
         }
         console.error('Verify Super Admin OTP error:', err);

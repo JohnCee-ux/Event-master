@@ -126,7 +126,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
     });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: err.errors[0].message });
+      res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
       return;
     }
     res.status(500).json({ error: err.message || 'Failed to create event.' });
@@ -260,7 +260,7 @@ router.patch('/:id', authMiddleware, requireEventOwnership, async (req: EventAut
     res.json({ event });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: err.errors[0].message });
+      res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
       return;
     }
     res.status(500).json({ error: err.message || 'Failed to update event.' });

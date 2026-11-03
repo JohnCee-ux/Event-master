@@ -170,7 +170,7 @@ router.post('/sync', authMiddleware, requireEventOwnership, async (req: EventAut
     });
   } catch (err: any) {
     if (err instanceof z.ZodError) {
-      res.status(400).json({ error: err.errors[0].message });
+      res.status(400).json({ error: err.issues[0]?.message ?? 'Invalid request' });
       return;
     }
     res.status(500).json({ error: err.message || 'Sync operation failed.' });
